@@ -21,16 +21,29 @@ public class Event {
     // The trade's history list
     private List<TradeRecord> tradeHistory;
 
-    public Event(int id, String name, String description, int commissionRate, String commissionType, int bParameter) {
+
+    public Event(int id, String name, String description, int commissionRate, List<Option> options, String commissionType, int bParameter) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.commissionRate = commissionRate;
         this.commissionType = commissionType;
         this.bParameter = bParameter;
-        this.options = new ArrayList<>();
+        this.options = options;
         this.tradeHistory = new ArrayList<>();
         this.totalCommissionsCollected = 0.0;
         this.isActive = true;
+    }
+
+    public int getbParameter() {
+        return bParameter;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
     }
 }

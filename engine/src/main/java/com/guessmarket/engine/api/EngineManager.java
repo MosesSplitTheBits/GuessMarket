@@ -5,6 +5,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.DocumentBuilder;
+
+import com.guessmarket.engine.util.XmlParser;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.w3c.dom.Element;
+import java.io.File;
 
 public class EngineManager {
 
@@ -32,11 +40,48 @@ public class EngineManager {
      * Command 1: Load event data from an XML file
      */
     public void loadDataFromXml(String filePath) {
-        // TODO: Clear existing data and reset balance
-        // TODO: Parse the XML file
-        // TODO: Calculate initial LMSR subsidies and deduct from Market Maker
-        // TODO: Populate the activeEvents map
+    try {
+        File xmlFile = new File(filePath);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document document = builder.parse(xmlFile);
+
+        document.getDocumentElement().normalize();
+
+        // 1. Clear existing data and reset balance
+        this.activeEvents.clear();
+        this.marketMakerBalance = 0.0;
+
+        // 2. Parse the XML file
+        NodeList eventNodes = document.getElementsByTagName("GM-event");
+        for (int i = 0; i < eventNodes.getLength(); i++) {
+            Element eventElement = (Element) eventNodes.item(i);
+
+            // Call your awesome new utility class!
+            Event parsedEvent = XmlParser.parseEventNode(eventElement);
+
+            // 3. Validate unique IDs
+            if (activeEvents.containsKey(parsedEvent.getId())) {
+                throw new Exception("Duplicate Event ID found: " + parsedEvent.getId());
+            }
+
+            // 4. Calculate initial LMSR subsidies and deduct from Market Maker
+            // At the start, qYes = 0 and qNo = 0
+            double initialCost = com.guessmarket.engine.util.LmsrCalculator.calculateCost(0, 0, parsedEvent.getbParameter());
+            this.marketMakerBalance -= initialCost;
+
+            // 5. Populate the activeEvents map
+            activeEvents.put(parsedEvent.getId(), parsedEvent);
+        }
+
+        System.out.println("XML loaded successfully! Total events: " + activeEvents.size());
+
+    } catch (Exception e) {
+        System.out.println("Error loading XML file: " + e.getMessage());
+        System.out.println("Please check the file format and path.");
     }
+    }
+
 
     /**
      * Command 2: Retrieve all events to display to the user
@@ -73,4 +118,6 @@ public class EngineManager {
         // TODO: If the fee is 'on-close', deduct it from the pool and add to Market Maker balance
         // TODO: Process payouts
     }
+
+
 }
