@@ -24,4 +24,12 @@ public class Option {
     public void setPurchasedShares(int purchasedShares) {
         this.purchasedShares = purchasedShares;
     }
+
+    public int getShares() {
+        return this.purchasedShares;
+    }
+
+    public void addShares(int amount) {
+        this.purchasedShares += amount;
+    }
 }

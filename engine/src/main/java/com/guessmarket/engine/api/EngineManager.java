@@ -8,7 +8,10 @@ import java.util.ArrayList;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 
+import com.guessmarket.engine.model.Option;
+import com.guessmarket.engine.model.TradeRecord;
 import com.guessmarket.engine.util.XmlParser;
+import com.guessmarket.engine.util.LmsrCalculator;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Element;
@@ -66,8 +69,12 @@ public class EngineManager {
             }
 
             // 4. Calculate initial LMSR subsidies and deduct from Market Maker
-            // At the start, qYes = 0 and qNo = 0
-            double initialCost = com.guessmarket.engine.util.LmsrCalculator.calculateCost(0, 0, parsedEvent.getbParameter());
+            // At the start, all quantities are 0
+            List<Integer> initialQuantities = new ArrayList<>();
+            for (Option opt : parsedEvent.getOptions()) {
+                initialQuantities.add(0);
+            }
+            double initialCost = LmsrCalculator.calculateCost(initialQuantities, parsedEvent.getbParameter());
             this.marketMakerBalance -= initialCost;
 
             // 5. Populate the activeEvents map
@@ -103,20 +110,118 @@ public class EngineManager {
      * Command 4: Participate in an event by buying shares
      */
     public void buyShares(int eventId, int optionIndex, int amount) {
-        // TODO: Retrieve the event from the map
-        // TODO: Calculate the cost using LmsrCalculator.calculateCost()
-        // TODO: Add 'on-purchase' commission to the Market Maker balance
-        // TODO: Update the Option's share count
-        // TODO: Create a TradeRecord and add it to the event's history
+        Event currentEvent = activeEvents.get(eventId);
+        if (currentEvent == null) {
+            System.out.println("Error: Event ID " + eventId + " does not exist.");
+            return;
+        }
+        // 1. Gather the current shares for ALL options
+        List<Integer> oldQuantities = new ArrayList<>();
+        for (Option opt : currentEvent.getOptions()) {
+            oldQuantities.add(opt.getShares());
+        }
+
+        int bParameter = currentEvent.getbParameter();
+
+        // 2. Calculate the cost BEFORE the purchase
+        double oldCost = com.guessmarket.engine.util.LmsrCalculator.calculateCost(oldQuantities, bParameter);
+
+        // 3. Create a new list for the theoretical state AFTER purchase
+        List<Integer> newQuantities = new ArrayList<>(oldQuantities);
+
+        // Retrieve the current shares for the chosen option, add the new amount, and overwrite it in the list
+        int updatedShareCount = newQuantities.get(optionIndex) + amount;
+        newQuantities.set(optionIndex, updatedShareCount);
+
+        // 4. Calculate the cost AFTER the purchase
+        double newCost = com.guessmarket.engine.util.LmsrCalculator.calculateCost(newQuantities, bParameter);
+
+        // 5. The actual price the user pays
+        double tradeCost = newCost - oldCost;
+
+        // 6. Process the Commission (if applicable)
+        if (currentEvent.getCommissionType().equals("on-purchase")) {
+            // Divide by 100.0 to force floating-point math
+            double commissionAmount = tradeCost * (currentEvent.getCommissionRate() / 100.0);
+            this.marketMakerBalance += commissionAmount;
+        }
+
+        // 7. Update the real Option object's share count
+        currentEvent.getOptions().get(optionIndex).addShares(amount);
+
+        // 8. Create a TradeRecord and log it
+        String optionName = currentEvent.getOptions().get(optionIndex).getName();
+        TradeRecord record = new TradeRecord(System.currentTimeMillis(), optionName, amount, tradeCost);
+
+        currentEvent.addTradeRecord(record);
+
     }
 
     /**
      * Command 5: Resolve and close an active event
      */
     public void closeEvent(int eventId, int winningOptionIndex) {
-        // TODO: Retrieve the event and mark it as CLOSED
-        // TODO: If the fee is 'on-close', deduct it from the pool and add to Market Maker balance
-        // TODO: Process payouts
+        // 1. Retrieve and Validate
+        Event currentEvent = activeEvents.get(eventId);
+        if (currentEvent == null) {
+            System.out.println("Error: Event ID " + eventId + " does not exist.");
+            return;
+        }
+
+        // 2. Mark the event as closed
+        currentEvent.setActive(false);
+
+        // 3. Gather final share quantities
+        List<Integer> finalQuantities = new ArrayList<>();
+        for (Option opt : currentEvent.getOptions()) {
+            finalQuantities.add(opt.getShares());
+        }
+
+        // 4. Calculate the total money pool at the end of trading
+        double totalPool = LmsrCalculator.calculateCost(finalQuantities, currentEvent.getbParameter());
+
+        // 5. Process 'on-close' Commission
+        if (currentEvent.getCommissionType().equals("on-close")) {
+            double commissionAmount = totalPool * (currentEvent.getCommissionRate() / 100.0);
+            this.marketMakerBalance += commissionAmount;
+
+            // Deduct the commission from the total pool available for winners
+            totalPool -= commissionAmount;
+        }
+
+        // 6. Calculate Payouts
+        int winningShares = currentEvent.getOptions().get(winningOptionIndex).getShares();
+        double payoutPerShare = 0.0;
+
+        // Prevent division by zero if nobody bought the winning option
+        if (winningShares > 0) {
+            payoutPerShare = totalPool / winningShares;
+        }
+
+        // Temporary console output to verify math during our tests
+        System.out.println("Event Closed! Winning Option: " + currentEvent.getOptions().get(winningOptionIndex).getName());
+        System.out.println("Total Pool (after fees): " + totalPool);
+        System.out.println("Payout per winning share: " + payoutPerShare);
+
+    }
+
+    // TEMPORARY TEST MAIN
+    public static void main(String[] args) {
+        EngineManager manager = new EngineManager();
+
+        // 1. Load the market
+        manager.loadDataFromXml("C:\\Users\\Daniel\\IdeaProjects\\GuessMarket\\engine\\src\\main\\java\\com\\guessmarket\\engine\\test_events.xml");
+
+        // 2. Simulate a user buying 10 shares of Option 0 ("Yes") for Event ID 3
+        System.out.println("\n--- Buying Shares ---");
+        manager.buyShares(3, 0, 10);
+
+        // 3. Print Market Maker Balance to see the 'on-purchase' commission collected
+        System.out.println("Market Maker Balance: " + manager.marketMakerBalance);
+
+        // 4. Resolve the event, declaring Option 0 ("Yes") as the winner
+        System.out.println("\n--- Closing Event ---");
+        manager.closeEvent(3, 0);
     }
 
 

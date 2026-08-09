@@ -2,6 +2,7 @@ package com.guessmarket.engine.model;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 
 public class Event {
     private int id;
@@ -36,14 +37,34 @@ public class Event {
     }
 
     public int getbParameter() {
-        return bParameter;
+        return this.bParameter;
     }
 
     public Integer getId() {
-        return id;
+        return this.id;
     }
 
     public String getName() {
-        return name;
+        return this.name;
+    }
+
+    public List<Option> getOptions() {
+        return this.options;
+    }
+
+    public Object getCommissionType() {
+        return this.commissionType;
+    }
+
+    public double getCommissionRate() {
+        return this.commissionRate;
+    }
+
+    public void addTradeRecord(TradeRecord record) {
+        this.tradeHistory.add(record);
+    }
+
+    public void setActive(boolean b) {
+        this.isActive = b;
     }
 }
