@@ -19,4 +19,50 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!-- Makes console-ui-1.0-SNAPSHOT.jar directly runnable via
+                 "java -jar console-ui-1.0-SNAPSHOT.jar": sets the Main-Class,
+                 and adds a Class-Path entry listing every dependency jar
+                 (engine.jar + the JAXB libraries engine needs), each
+                 expected to sit in a "lib/" folder next to this jar. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.guessmarket.consoleui.Main</mainClass>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Copies every dependency jar (engine.jar and everything it
+                 needs at runtime, like the JAXB runtime jars) into
+                 target/lib/, so the Class-Path entry above has something
+                 to point at. Runs automatically during "mvn package". -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.7.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

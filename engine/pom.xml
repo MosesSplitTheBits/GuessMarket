@@ -11,5 +11,20 @@
 
     <artifactId>engine</artifactId>
 
+    <dependencies>
+        <!-- The JAXB API: the annotations (@XmlRootElement etc.) and interfaces (JAXBContext, Unmarshaller...).
+             Needed because JAXB was removed from the JDK itself back in Java 11. -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.5</version>
+        </dependency>
+        <!-- The actual implementation that does the parsing work behind those interfaces. -->
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>4.0.9</version>
+        </dependency>
+    </dependencies>
 
 </project>

@@ -2,7 +2,6 @@ package com.guessmarket.engine.model;
 
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
 
 public class Event {
     private int id;
@@ -10,8 +9,9 @@ public class Event {
     private String description;
     private int commissionRate; // 0 to 90
     private String commissionType; // "on-purchase" or "on-close"
-    private double totalCommissionsCollected; //Track current commision
+    private double totalCommissionsCollected;
     private boolean isActive;
+    private Integer winningOptionIndex; // null until the event is closed
 
     // LMSR specific
     private int bParameter;
@@ -34,6 +34,7 @@ public class Event {
         this.tradeHistory = new ArrayList<>();
         this.totalCommissionsCollected = 0.0;
         this.isActive = true;
+        this.winningOptionIndex = null;
     }
 
     public int getbParameter() {
@@ -48,16 +49,44 @@ public class Event {
         return this.name;
     }
 
+    public String getDescription() {
+        return this.description;
+    }
+
     public List<Option> getOptions() {
         return this.options;
     }
 
-    public Object getCommissionType() {
+    public String getCommissionType() {
         return this.commissionType;
     }
 
     public double getCommissionRate() {
         return this.commissionRate;
+    }
+
+    public List<TradeRecord> getTradeHistory() {
+        return this.tradeHistory;
+    }
+
+    public boolean isActive() {
+        return this.isActive;
+    }
+
+    public Integer getWinningOptionIndex() {
+        return this.winningOptionIndex;
+    }
+
+    public void setWinningOptionIndex(int index) {
+        this.winningOptionIndex = index;
+    }
+
+    public double getTotalCommissionsCollected() {
+        return this.totalCommissionsCollected;
+    }
+
+    public void addCommission(double amount) {
+        this.totalCommissionsCollected += amount;
     }
 
     public void addTradeRecord(TradeRecord record) {
