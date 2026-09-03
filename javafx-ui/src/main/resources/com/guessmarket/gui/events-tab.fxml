@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.layout.VBox?>
+
+<!--
+  Left = filter row + event list, right = selected event's details
+  (event-detail.fxml), matching the two-column layout in AppScetch.png.
+-->
+<SplitPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.guessmarket.gui.controller.EventsController"
+           dividerPositions="0.4">
+
+    <VBox spacing="5">
+        <!-- TODO: filter row goes here (by event method / status / commission
+             method — spec hints at ToggleButtons, each allowing "show all"). -->
+        <ListView fx:id="eventsListView" VBox.vgrow="ALWAYS"/>
+    </VBox>
+
+    <fx:include fx:id="eventDetail" source="event-detail.fxml"/>
+
+</SplitPane>
