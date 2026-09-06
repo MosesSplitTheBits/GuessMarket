@@ -26,13 +26,26 @@ public class EventDetailController {
 
     /** Called by EventsController whenever the selected event changes. */
     public void showEvent(Event event) {
-        // TODO: populate eventTitleLabel from event.getName() (or similar).
-        // TODO: for now (LMSR only, Exercise 1 parity) show each option's
-        //       current share count in its pane — that's command 3's content
-        //       from Exercise 1, just rendered as labels instead of printed.
-        //       Order Book-specific rendering (bid/ask tables, LAST/BID/ASK/
-        //       MID/SPREAD stats) comes later once the engine supports it.
-        // TODO: populate participationsPane once the engine tracks
-        //       per-user participation (that's Exercise 2's user work).
+        if(event != null) {
+            eventTitleLabel.setText(event.getName());
+
+            optionOnePane.getChildren().setAll(
+                    new Label(event.getOptions().get(0).getName()),
+                    new Label("Shares: " + event.getOptions().get(0).getShares())
+            );
+
+            optionTwoPane.getChildren().setAll(
+                    new Label(event.getOptions().get(1).getName()),
+                    new Label("Shares: " + event.getOptions().get(1).getShares())
+            );
+        }
+        else{
+            eventTitleLabel.setText("Select Event");
+            optionOnePane.getChildren().clear();
+            optionTwoPane.getChildren().clear();
+        }
+
+
+
     }
 }

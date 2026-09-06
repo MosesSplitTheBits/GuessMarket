@@ -23,11 +23,12 @@ public class LoadFileTask extends Task<String> {
 
     @Override
     protected String call() throws Exception {
-        // TODO: report progress as you go, e.g. updateProgress(0, 1) at the
-        //       start and updateProgress(1, 1) at the end.
-        // TODO: Thread.sleep(...) briefly (spec suggests ~1-2 seconds total)
-        //       to simulate visible progress.
-        // TODO: return engine.loadDataFromXml(file.getAbsolutePath());
-        return null;
+        updateProgress(0, 1);
+        Thread.sleep(1000);
+        updateProgress(1, 2);
+        Thread.sleep(1000);
+        String result = engine.loadDataFromXml(file.getAbsolutePath());
+        updateProgress(1, 1);
+        return result;
     }
 }

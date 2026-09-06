@@ -1,10 +1,14 @@
 package com.guessmarket.gui.controller;
 
 import com.guessmarket.engine.api.EngineManager;
+import com.guessmarket.gui.task.LoadFileTask;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.stage.FileChooser;
+
+import java.io.File;
 
 /**
  * Controller for main-view.fxml — the top bar (load button + path label) and
@@ -46,17 +50,24 @@ public class MainController {
 
     @FXML
     private void handleLoadFile() {
-        // TODO:
-        //  1. Open a FileChooser and let the user pick an .xml file (spec
-        //     requires this — no typed paths, no hardcoded directories).
-        //  2. If they picked one, build a LoadFileTask(engine, file) (see the
-        //     task package), bind loadProgressBar.progressProperty() to
-        //     task.progressProperty(), and make the bar visible.
-        //  3. On task success: read task.getValue() (the message EngineManager
-        //     returned), update filePathLabel, and tell eventsTabController to
-        //     refresh from the engine.
-        //  4. Run the task on a background thread — new Thread(task).start() —
-        //     never call slow engine methods directly here, this handler runs
-        //     on the JavaFX Application Thread.
+        FileChooser chooser = new FileChooser();
+        //Making file explorer only show .xml files
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("XML Files", "*.xml"));
+        File file = chooser.showOpenDialog(loadFileButton.getScene().getWindow());
+        if (file != null) {
+            LoadFileTask task = new LoadFileTask(engine, file);
+            loadProgressBar.progressProperty().bind(task.progressProperty());
+            task.setOnSucceeded(event -> {
+                String message = task.getValue();
+                filePathLabel.setText(message);
+                if(message.startsWith("XML loaded successfully")){
+                    eventsTabController.refreshEvents();
+                }
+                loadProgressBar.setVisible(false);
+
+            });
+            loadProgressBar.setVisible(true);
+            new Thread(task).start();
+        }
     }
 }

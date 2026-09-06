@@ -5,6 +5,8 @@
     <file url="file://$PROJECT_DIR$/console-ui/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/engine/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/engine/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/javafx-ui/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/javafx-ui/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
   </component>
