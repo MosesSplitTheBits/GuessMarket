@@ -8,9 +8,12 @@ import java.util.ArrayList;
 
 import com.guessmarket.engine.model.Option;
 import com.guessmarket.engine.model.TradeRecord;
+import com.guessmarket.engine.model.TradingMethod;
+import com.guessmarket.engine.model.User;
 import com.guessmarket.engine.util.XmlParser;
 import com.guessmarket.engine.util.LmsrCalculator;
 import com.guessmarket.engine.xml.GmEventXml;
+import com.guessmarket.engine.xml.GmUserXml;
 import com.guessmarket.engine.xml.GuessMarketXml;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.Unmarshaller;
@@ -27,6 +30,7 @@ public class EngineManager {
     // iteration order — the order they were loaded in — which the UI
     // relies on for showing a consistent numbered list.
     private final Map<Integer, Event> activeEvents;
+    private final Map<String, User> activeUsers;
 
     // The global account for the Market Maker's fees and subsidies
     private double marketMakerBalance;
@@ -34,6 +38,7 @@ public class EngineManager {
     // Constructor to initialize a clean slate
     public EngineManager() {
         this.activeEvents = new LinkedHashMap<>();
+        this.activeUsers = new LinkedHashMap<>();
         this.marketMakerBalance = 0.0;
     }
 
@@ -78,10 +83,39 @@ public class EngineManager {
                 tempEvents.put(event.getId(), event);
             }
 
+            //Check if userlist is correct, only then pushes it to app
+            Map<String, User> tempUsers = new LinkedHashMap<>();
+            for(GmUserXml xmlUser : root.getUsers()) {
+                User user = XmlParser.mapToUser(xmlUser);
+
+                if(tempUsers.containsKey(user.getName()))
+                {
+                    throw new Exception("Duplicate User name found: " + user.getName());
+                }
+
+
+
+                for(int eventId : user.getManagedEventIds())
+                {
+                    Event event = tempEvents.get(eventId);
+                    if(event != null)
+                    {
+                        event.setOwnerUsername(user.getName());
+                    }
+                    else{throw new Exception("Event with id " + eventId + " not found");}
+                }
+
+                tempUsers.put(user.getName(), user);
+            }
+
+
             // Every event parsed and validated cleanly — compute the total
             // initial LMSR subsidy across all of them.
             double totalCost = 0;
             for (Event event : tempEvents.values()) {
+                if (event.getMethod() != TradingMethod.LMSR) {
+                    continue; // no LMSR subsidy for Order Book events
+                }
                 List<Integer> tempOptionList = new ArrayList<>();
                 for (Option eventOption : event.getOptions()) {
                     tempOptionList.add(0);
@@ -92,6 +126,8 @@ public class EngineManager {
             // Only now, after everything above succeeded, commit the new state.
             this.activeEvents.clear();
             this.activeEvents.putAll(tempEvents);
+            this.activeUsers.clear();
+            this.activeUsers.putAll(tempUsers);
             this.marketMakerBalance = -totalCost;
 
             return "XML loaded successfully! Total events: " + activeEvents.size();
@@ -113,6 +149,14 @@ public class EngineManager {
      */
     public Event getEventDetails(int eventId) {
         return activeEvents.get(eventId);
+    }
+
+    public List<User> getAllUsers() {
+        return new ArrayList<>(activeUsers.values());
+    }
+
+    public User getUserDetails(String username) {
+        return activeUsers.get(username);
     }
 
     /**
@@ -169,8 +213,7 @@ public class EngineManager {
             return "Error: Event ID " + eventId + " does not exist.";
         }
 
-        currentEvent.setActive(false);
-        currentEvent.setWinningOptionIndex(winningOptionIndex);
+        currentEvent.close(winningOptionIndex);
 
         List<Integer> finalQuantities = new ArrayList<>();
         for (Option opt : currentEvent.getOptions()) {

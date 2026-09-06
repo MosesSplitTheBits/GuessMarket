@@ -2,7 +2,13 @@ package com.guessmarket.engine.util;
 
 import com.guessmarket.engine.model.Event;
 import com.guessmarket.engine.model.Option;
+import com.guessmarket.engine.model.TradingMethod;
+import com.guessmarket.engine.model.User;
+import com.guessmarket.engine.xml.EventRefXml;
 import com.guessmarket.engine.xml.GmEventXml;
+import com.guessmarket.engine.xml.GmLmsrXml;
+import com.guessmarket.engine.xml.GmUserXml;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,9 +42,41 @@ public class XmlParser {
             optionsList.add(newOption);
         }
 
-        int bParameter = xmlEvent.getMethod().getLmsr().getB();
+        GmLmsrXml lmsr = xmlEvent.getMethod().getLmsr();
 
-        return new Event(id, name, description, rate, optionsList, commissionType, bParameter);
+        TradingMethod method;
+        int bParameter;
+        if (lmsr != null) {
+            method = TradingMethod.LMSR;
+            bParameter = lmsr.getB();
+        } else {
+            method = TradingMethod.ORDER_BOOK;
+            bParameter = 0; // unused until Order Book trading is implemented
+        }
+
+        return new Event(id, name, description, rate, optionsList, commissionType, bParameter, method);
+    }
+
+    public static User mapToUser(GmUserXml xmlUser) throws Exception {
+
+        String name = xmlUser.getName();
+        double initCash = xmlUser.getInitialCash();
+        if (initCash < 0){
+            throw new Exception("Initial Cash must be greater than zero.");
+        }
+
+        User newUser = new User(name, initCash);
+
+        List<EventRefXml> managedEvents = xmlUser.getManagedEvents();
+
+        if (managedEvents != null) {
+            for (EventRefXml ref : managedEvents) {
+                newUser.addManagedEvent(ref.getId());
+            }
+        }
+
+        return newUser;
+
     }
 
 }

@@ -10,9 +10,14 @@
     <packaging>pom</packaging>
     <modules>
         <module>engine</module>
-        <module>console-ui</module>
         <module>javafx-ui</module>
     </modules>
+    <!-- console-ui (Exercise 1, already submitted/graded) is intentionally left
+         out of the reactor build going forward: Exercise 2 changes EngineManager's
+         buyShares/closeEvent signatures (adding a username parameter), which
+         console-ui's Ex1 calls don't account for. Its source is untouched on
+         disk, just no longer built as part of `mvn compile` on the parent. -->
+
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
