@@ -2,12 +2,14 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
 
 <!--
   Root layout, matching AppScetch.png: a top bar (Load File button + currently
@@ -16,9 +18,7 @@
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.guessmarket.gui.controller.MainController">
 
-    <!-- loadProgressBar isn't in the sketch, but the spec requires a progress
-         indicator during file load — this is a reasonable first spot for it,
-         revisit if it looks wrong once there's an actual load to watch. -->
+    <!-- loadProgressBar  -->
     <top>
         <HBox spacing="10" alignment="CENTER_LEFT">
             <padding>
@@ -27,6 +27,14 @@
             <Button fx:id="loadFileButton" text="Load File" onAction="#handleLoadFile"/>
             <Label fx:id="filePathLabel" text="No file loaded"/>
             <ProgressBar fx:id="loadProgressBar" progress="0" visible="false"/>
+            <!-- A growing Region on each side of the "Acting as" group splits
+                 the leftover space evenly, hugging the group toward the middle
+                 instead of pushing it all the way to the right. -->
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label text="Acting as:"/>
+            <ComboBox fx:id="currentUserComboBox" promptText="Select user"/>
+            <Label fx:id="currentUserLabel" text="Hello, guest"/>
+            <Region HBox.hgrow="ALWAYS"/>
         </HBox>
     </top>
 

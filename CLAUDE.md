@@ -22,11 +22,7 @@ In practice, that means:
 - When something in his code is wrong, say so plainly and explain the failure scenario, rather than quietly
   patching around it.
 
-## Current status
 
-Exercise 1 (console app) is **done and submitted**: JAXB-based XML loading with rollback-safe validation,
-all 6 console-ui commands working, packaged into 2 jars + `lib/` (JAXB runtime deps) + `run.bat`, tested
-against all 4 official Mama sample files, readme delivered. Now starting **Exercise 2** (JavaFX GUI).
 
 ## Architecture (established in Exercise 1, carries forward)
 
@@ -51,13 +47,8 @@ against all 4 official Mama sample files, readme delivered. Now starting **Exerc
 - `docs/assignment-spec.md` — full assignment text (Hebrew), extracted from the official docx, including
   the XML schema element tables for Exercise 1/2/3. Read the Exercise 2 section + Appendix א (LMSR recap),
   ב (Order Book), and ג (XML schema, "סכמה תרגיל 2") before starting new Exercise 2 work.
-- **Missing from that extraction:** the docx's Appendix ד (visual schema diagrams) and the separate
-  graphical UI sketch file the course provided for the JavaFX layout ("קובץ סקיצה גרפי") are images, not
-  text — they didn't come through. If Daniel has those files, they should be added to `docs/` too so
-  they're available to reference.
-- The Exercise 1 submission readme (design choices, class summaries) — ask Daniel where he saved it, or
-  regenerate a similar one for Exercise 2 at submission time; same requirements apply (Word/PDF only, not
-  plain text, must link to GitHub, must list submitter name/ID/email).
+- The Exercise 1 submission readme is included. Need to create new one at the end of EX2.
+- PROGRESS.MD tracks current progress. refer to that when deciding whats the next step.
 
 ## Known rough edges to watch for
 

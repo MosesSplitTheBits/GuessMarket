@@ -1,12 +1,15 @@
 package com.guessmarket.gui.controller;
 
 import com.guessmarket.engine.api.EngineManager;
+import com.guessmarket.engine.model.User;
 import com.guessmarket.gui.task.LoadFileTask;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.stage.FileChooser;
+import javafx.util.StringConverter;
 
 import java.io.File;
 
@@ -30,6 +33,21 @@ public class MainController {
     @FXML
     private ProgressBar loadProgressBar;
 
+    @FXML
+    private ComboBox<User> currentUserComboBox;
+
+    @FXML
+    private Label currentUserLabel;
+
+    // Which user is "acting" right now — null until one's picked from
+    // currentUserComboBox. Future features (buying shares, activating
+    // events) will read this via getCurrentUser().
+    private User currentUser;
+
+    public User getCurrentUser() {
+        return currentUser;
+    }
+
     // Injected automatically by FXMLLoader: main-view.fxml includes
     // events-tab.fxml with fx:id="eventsTab", so the loader looks for a field
     // named "eventsTabController" here and wires it to that include's
@@ -46,6 +64,35 @@ public class MainController {
         eventsTabController.setEngine(engine);
         usersTabController.setEngine(engine);
         loadProgressBar.setVisible(false);
+
+
+        currentUserComboBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(User user) {
+                if (user != null) {
+                    return user.getName();
+                }
+                else {
+                    return null;
+                }
+            }
+            @Override
+            public User fromString(String string) { //Dont receive input here
+                return null;
+            }
+        });
+
+
+        currentUserComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if(newValue != null) {
+                this.currentUser = newValue;
+                currentUserLabel.setText("Hello, " + currentUser.getName());
+            }
+            else {this.currentUser = null;
+            currentUserLabel.setText("No User Selected");}
+
+
+        });
     }
 
     @FXML
@@ -62,6 +109,7 @@ public class MainController {
                 filePathLabel.setText(message);
                 if(message.startsWith("XML loaded successfully")){
                     eventsTabController.refreshEvents();
+                    currentUserComboBox.getItems().setAll(engine.getAllUsers());
                 }
                 loadProgressBar.setVisible(false);
 

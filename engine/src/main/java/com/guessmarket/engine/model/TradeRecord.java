@@ -5,12 +5,14 @@ public class TradeRecord {
     private String optionName;
     private int quantity;
     private double pricePaid;
+    private String username;
 
-    public TradeRecord(long timestamp, String optionName, int quantity, double pricePaid) {
+    public TradeRecord(long timestamp, String optionName, int quantity, double pricePaid, String username) {
         this.timestamp = timestamp;
         this.optionName = optionName;
         this.quantity = quantity;
         this.pricePaid = pricePaid;
+        this.username = username;
     }
 
     public long getTimestamp() {
@@ -27,5 +29,9 @@ public class TradeRecord {
 
     public double getPricePaid() {
         return pricePaid;
+    }
+
+    public String getUsername() {
+        return username;
     }
 }

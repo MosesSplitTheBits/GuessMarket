@@ -160,6 +160,29 @@ public class EngineManager {
     }
 
     /**
+     * Activates a NOT_STARTED event, allowing trading to begin.
+     * Only the market maker who owns the event may activate it.
+     */
+    public String activateEvent(int eventId, String username) {
+
+        User user = activeUsers.get(username);
+        if(user == null){return "User not found: " + username;}
+
+        Event event = activeEvents.get(eventId);
+        if(event == null){return "Event with id " + eventId + " not found";}
+
+
+
+        if(!user.isMarketMakerFor(eventId)) {
+            return "You are not the MM!";
+        }
+
+        if(!event.activate()){return "Event already started / finished";}
+
+        return "Event Activated Successfully";
+    }
+
+    /**
      * Command 4: Participate in an event by buying shares.
      * Returns a summary of what was paid, split between the shares
      * themselves and any purchase-time commission.
