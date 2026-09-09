@@ -1,23 +1,59 @@
 package com.guessmarket.gui.controller;
 
 import com.guessmarket.engine.api.EngineManager;
+import com.guessmarket.engine.model.User;
 import javafx.fxml.FXML;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 
+import java.util.List;
+
 /**
- * Controller for users-tab.fxml. The engine has no concept of users/accounts
- * yet — that's still-to-do Exercise 2 work (GM-users in the new XML schema).
- * This controller exists so main-view.fxml has something to include and the
- * Users tab isn't blank; it'll get real content once that engine work lands.
+ * Controller for users-tab.fxml — the left-hand user list. Detail panel
+ * (balance, active events, trade history) is still a placeholder VBox in the
+ * FXML; that's separate follow-up work, not just a list-wiring fix.
  */
 public class UsersController {
 
     private EngineManager engine;
 
     @FXML
-    private ListView<String> usersListView; // TODO: swap String for a real User model once it exists
+    private ListView<User> usersListView;
+
+    // Injected the same way EventsController got eventDetailController:
+    // user-detail.fxml is included here with fx:id="userDetail".
+    @FXML
+    private UserDetailController userDetailController;
 
     public void setEngine(EngineManager engine) {
         this.engine = engine;
+
+        //Cell factory to turn User into text in the ListView
+        usersListView.setCellFactory(listView -> new ListCell<User>() {
+            @Override
+            protected void updateItem(User user, boolean empty) {
+                super.updateItem(user, empty);
+                setText(empty || user == null ? null : user.getName());
+            }
+        });
+
+        //Set listener to send selected user (plus all events, to find which
+        //ones they've traded in) to UserDetailController
+        usersListView.getSelectionModel().selectedItemProperty().addListener((obs, oldUser, newUser) -> {
+            userDetailController.showUser(newUser, engine.getAllEvents());
+        });
+    }
+
+    /**
+     * Called by MainController after a file load, and after any trading
+     * action completes (balances can change on either side of a trade) —
+     * also re-shows whichever user is currently selected so their balance
+     * label picks up the change (same User object, same list index, so the
+     * ListView's own selection listener won't refire on its own).
+     */
+    public void refreshUsers() {
+        List<User> userList = engine.getAllUsers();
+        usersListView.getItems().setAll(userList);
+        userDetailController.showUser(usersListView.getSelectionModel().getSelectedItem(), engine.getAllEvents());
     }
 }

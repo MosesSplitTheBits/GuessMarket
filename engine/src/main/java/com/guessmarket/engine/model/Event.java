@@ -15,6 +15,11 @@ public class Event {
     private Integer winningOptionIndex; // null until the event is closed
     private TradingMethod method;
 
+    // The event's own pooled cash: funded by the MM's subsidy on activation,
+    // topped up by trade proceeds on each buy, drawn down to pay winners on
+    // close. Kept separate from the owning MM's personal User.balance.
+    private double accountBalance;
+
     // LMSR specific
     private int bParameter;
 
@@ -38,6 +43,7 @@ public class Event {
         this.totalCommissionsCollected = 0.0;
         this.status = EventStatus.NOT_STARTED;
         this.winningOptionIndex = null;
+        this.accountBalance = 0.0;
     }
 
     public boolean activate() {
@@ -106,6 +112,14 @@ public class Event {
 
     public void addTradeRecord(TradeRecord record) {
         this.tradeHistory.add(record);
+    }
+
+    public double getAccountBalance() {
+        return accountBalance;
+    }
+
+    public void adjustAccountBalance(double amount) {
+        accountBalance += amount;
     }
 
     public EventStatus getStatus() {return status;}

@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
 <!--
-  Right-hand panel from AppScetch.png: title, then the two option order-book
-  panes side by side, then a full-width participations panel below.
+  Right-hand panel from AppScetch.png: title + status + Activate button, the
+  two option panes side by side (name/shares/current price for LMSR, plus a
+  buy-quantity Spinner+button and a "this wins"/close button — built in code
+  in EventDetailController.showOptionPane since their enabled state depends
+  on the acting user), then the event-wide account state + full trade
+  history below. LMSR-only pricing for now — Order Book pricing is a
+  separate mechanism, deliberately deferred.
 -->
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="com.guessmarket.gui.controller.EventDetailController"
@@ -17,15 +24,18 @@
     </padding>
 
     <Label fx:id="eventTitleLabel" text="Select an event" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Label fx:id="eventStatusLabel"/>
+        <Button fx:id="activateButton" text="Activate Event" onAction="#handleActivate"/>
+    </HBox>
 
     <HBox spacing="10">
-        <!-- TODO: fill each pane with that option's trading info. For now
-             (LMSR-only, Exercise 1 parity) that's name/share count/cost.
-             Once Order Book exists, this becomes a bid/ask table + stats. -->
         <VBox fx:id="optionOnePane" HBox.hgrow="ALWAYS" style="-fx-border-color: gray;"/>
         <VBox fx:id="optionTwoPane" HBox.hgrow="ALWAYS" style="-fx-border-color: gray;"/>
     </HBox>
 
-    <VBox fx:id="participationsPane" style="-fx-border-color: gray;"/>
+    <Label fx:id="accountStateLabel" wrapText="true"/>
+    <Label text="Trade history:" style="-fx-font-weight: bold;"/>
+    <ListView fx:id="tradeHistoryListView" VBox.vgrow="ALWAYS"/>
 
 </VBox>

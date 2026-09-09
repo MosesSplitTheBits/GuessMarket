@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.layout.VBox?>
+
+<!--
+  Right-hand panel for the Users tab: selected user's name/balance, the list
+  of events they've actually traded in (spec: participation counts from the
+  first trade, not just being assigned as MM), and — once one of those is
+  selected — that user's own trade rows in it plus a closed-event summary
+  (total shares per option + winner). LMSR-only for now; Order Book is
+  deliberately deferred (see PROGRESS.md).
+-->
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.guessmarket.gui.controller.UserDetailController"
+      spacing="10">
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+
+    <Label fx:id="userNameLabel" text="Select a user" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+    <Label fx:id="userBalanceLabel"/>
+
+    <Label text="Active events:" style="-fx-font-weight: bold;"/>
+    <ListView fx:id="activeEventsListView" prefHeight="120"/>
+
+    <Label fx:id="eventInvolvementTitleLabel" style="-fx-font-weight: bold;"/>
+    <ListView fx:id="tradeHistoryListView" VBox.vgrow="ALWAYS"/>
+    <Label fx:id="closedSummaryLabel" wrapText="true"/>
+
+</VBox>

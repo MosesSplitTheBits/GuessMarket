@@ -65,6 +65,19 @@ public class MainController {
         usersTabController.setEngine(engine);
         loadProgressBar.setVisible(false);
 
+        // Give the event-detail panel what it needs to drive
+        // activate/buy/close: the engine, a way to ask "who's acting right
+        // now" at click-time (evaluated fresh via getCurrentUser(), not kept
+        // in sync), and a callback to refresh both tabs after a trade
+        // changes balances/state on both sides.
+        EventDetailController eventDetailController = eventsTabController.getEventDetailController();
+        eventDetailController.setEngine(engine);
+        eventDetailController.setCurrentUserSupplier(this::getCurrentUser);
+        eventDetailController.setOnActionCompleted(() -> {
+            eventsTabController.refreshEvents();
+            usersTabController.refreshUsers();
+        });
+
 
         currentUserComboBox.setConverter(new StringConverter<>() {
             @Override
@@ -91,7 +104,10 @@ public class MainController {
             else {this.currentUser = null;
             currentUserLabel.setText("No User Selected");}
 
-
+            // Activate/Buy/Close are gated on who's acting, not just on the
+            // event — re-render the currently selected event so switching
+            // users re-gates them immediately instead of on the next click.
+            eventsTabController.refreshSelectedEventDetail();
         });
     }
 
@@ -109,6 +125,7 @@ public class MainController {
                 filePathLabel.setText(message);
                 if(message.startsWith("XML loaded successfully")){
                     eventsTabController.refreshEvents();
+                    usersTabController.refreshUsers();
                     currentUserComboBox.getItems().setAll(engine.getAllUsers());
                 }
                 loadProgressBar.setVisible(false);

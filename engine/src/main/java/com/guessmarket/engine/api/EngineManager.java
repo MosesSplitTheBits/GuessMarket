@@ -1,15 +1,12 @@
 package com.guessmarket.engine.api;
 
-import com.guessmarket.engine.model.Event;
+import com.guessmarket.engine.model.*;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 
-import com.guessmarket.engine.model.Option;
-import com.guessmarket.engine.model.TradeRecord;
-import com.guessmarket.engine.model.TradingMethod;
-import com.guessmarket.engine.model.User;
 import com.guessmarket.engine.util.XmlParser;
 import com.guessmarket.engine.util.LmsrCalculator;
 import com.guessmarket.engine.xml.GmEventXml;
@@ -32,14 +29,10 @@ public class EngineManager {
     private final Map<Integer, Event> activeEvents;
     private final Map<String, User> activeUsers;
 
-    // The global account for the Market Maker's fees and subsidies
-    private double marketMakerBalance;
-
     // Constructor to initialize a clean slate
     public EngineManager() {
         this.activeEvents = new LinkedHashMap<>();
         this.activeUsers = new LinkedHashMap<>();
-        this.marketMakerBalance = 0.0;
     }
 
     // ==========================================
@@ -85,6 +78,10 @@ public class EngineManager {
 
             //Check if userlist is correct, only then pushes it to app
             Map<String, User> tempUsers = new LinkedHashMap<>();
+            // Tracks which user was already assigned as MM for each event ID,
+            // so a second user claiming the same event is caught as an error
+            // instead of silently overwriting the first via setOwnerUsername.
+            Map<Integer, String> eventOwners = new LinkedHashMap<>();
             for(GmUserXml xmlUser : root.getUsers()) {
                 User user = XmlParser.mapToUser(xmlUser);
 
@@ -98,37 +95,40 @@ public class EngineManager {
                 for(int eventId : user.getManagedEventIds())
                 {
                     Event event = tempEvents.get(eventId);
-                    if(event != null)
+                    if(event == null)
                     {
-                        event.setOwnerUsername(user.getName());
+                        throw new Exception("Event with id " + eventId + " not found");
                     }
-                    else{throw new Exception("Event with id " + eventId + " not found");}
+                    if(eventOwners.containsKey(eventId))
+                    {
+                        throw new Exception("Event " + eventId + " has more than one MM assigned: "
+                                + eventOwners.get(eventId) + " and " + user.getName());
+                    }
+                    eventOwners.put(eventId, user.getName());
+                    event.setOwnerUsername(user.getName());
                 }
 
                 tempUsers.put(user.getName(), user);
             }
 
-
-            // Every event parsed and validated cleanly — compute the total
-            // initial LMSR subsidy across all of them.
-            double totalCost = 0;
+            // Spec requires every event to have exactly one MM assigned from
+            // the file's users — the loop above already rejects more than
+            // one, this catches events nobody claimed at all.
             for (Event event : tempEvents.values()) {
-                if (event.getMethod() != TradingMethod.LMSR) {
-                    continue; // no LMSR subsidy for Order Book events
+                if (!eventOwners.containsKey(event.getId())) {
+                    throw new Exception("Event " + event.getId() + " has no MM assigned to it.");
                 }
-                List<Integer> tempOptionList = new ArrayList<>();
-                for (Option eventOption : event.getOptions()) {
-                    tempOptionList.add(0);
-                }
-                totalCost += LmsrCalculator.calculateCost(tempOptionList, event.getbParameter());
             }
 
-            // Only now, after everything above succeeded, commit the new state.
+
+            // Every event parsed and validated cleanly — commit the new state.
+            // (No subsidy is paid here: each event's LMSR subsidy is now debited
+            // from its own MM's balance in activateEvent, not upfront for all
+            // events at once — see activateEvent.)
             this.activeEvents.clear();
             this.activeEvents.putAll(tempEvents);
             this.activeUsers.clear();
             this.activeUsers.putAll(tempUsers);
-            this.marketMakerBalance = -totalCost;
 
             return "XML loaded successfully! Total events: " + activeEvents.size();
 
@@ -177,7 +177,29 @@ public class EngineManager {
             return "You are not the MM!";
         }
 
+        // LMSR needs an upfront subsidy to seed the market (the MM's max
+        // possible loss): C(0) with every option's shares at 0. Order Book
+        // events don't use LMSR pricing, so there's nothing to subsidize.
+        double subsidy = 0.0;
+        if (event.getMethod() == TradingMethod.LMSR) {
+            List<Integer> zeroQuantities = new ArrayList<>();
+            for (Option opt : event.getOptions()) {
+                zeroQuantities.add(0);
+            }
+            subsidy = LmsrCalculator.calculateCost(zeroQuantities, event.getbParameter());
+
+            if (user.getBalance() < subsidy) {
+                return "Cannot activate: MM balance (" + user.getBalance()
+                        + ") is less than the required subsidy (" + subsidy + ")";
+            }
+        }
+
         if(!event.activate()){return "Event already started / finished";}
+
+        if (subsidy > 0) {
+            user.adjustBalance(-subsidy);
+            event.adjustAccountBalance(subsidy);
+        }
 
         return "Event Activated Successfully";
     }
@@ -187,11 +209,23 @@ public class EngineManager {
      * Returns a summary of what was paid, split between the shares
      * themselves and any purchase-time commission.
      */
-    public String buyShares(int eventId, int optionIndex, int amount) {
+    public String buyShares(int eventId, int optionIndex, int amount, String username) {
         Event currentEvent = activeEvents.get(eventId);
         if (currentEvent == null) {
             return "Error: Event ID " + eventId + " does not exist.";
         }
+
+        // TODO: look up the User by username (same pattern as activateEvent).
+        //       If null, return an error message.
+        User user =  activeUsers.get(username);
+        if(user == null){return "User not found: " + username;}
+
+        // TODO: reject if user.isBlocked() — a blocked user can't trade.
+        if(user.isBlocked()){return "User is blocked!";}
+
+        // TODO: reject if currentEvent.getStatus() != EventStatus.ACTIVE —
+        //       can't buy shares in an event that hasn't started yet or is closed.
+        if(currentEvent.getStatus() != EventStatus.ACTIVE){return "Event is not active!";}
 
         List<Integer> oldQuantities = new ArrayList<>();
         for (Option opt : currentEvent.getOptions()) {
@@ -211,15 +245,32 @@ public class EngineManager {
         double commissionAmount = 0.0;
         if (currentEvent.getCommissionType().equals("on-purchase")) {
             commissionAmount = tradeCost * (currentEvent.getCommissionRate() / 100.0);
-            this.marketMakerBalance += commissionAmount;
             currentEvent.addCommission(commissionAmount);
+
+            // TODO: credit commissionAmount to the MM's own balance, not the
+            //       event account — look up the MM via
+            //       activeUsers.get(currentEvent.getOwnerUsername()) and call
+            //       mm.adjustBalance(+commissionAmount).
+            User userMM = activeUsers.get(currentEvent.getOwnerUsername());
+            if(userMM == null){return "User not found: " + username;}
+            userMM.adjustBalance(+commissionAmount);
         }
+
+        // TODO: credit tradeCost (not commissionAmount) into the event's own
+        //       pooled account via currentEvent.adjustAccountBalance(tradeCost)
+        //       — this is the money that backs the payout at close time.
+        currentEvent.adjustAccountBalance(tradeCost);
 
         currentEvent.getOptions().get(optionIndex).addShares(amount);
 
         String optionName = currentEvent.getOptions().get(optionIndex).getName();
         double totalPaid = tradeCost + commissionAmount;
-        TradeRecord record = new TradeRecord(System.currentTimeMillis(), optionName, amount, totalPaid);
+
+        // TODO: deduct totalPaid from the user's balance via user.adjustBalance(-totalPaid).
+        //       adjustBalance already flips the user to blocked if this takes them negative.
+        user.adjustBalance(-totalPaid);
+
+        TradeRecord record = new TradeRecord(System.currentTimeMillis(), optionName, amount, tradeCost, commissionAmount, username);
         currentEvent.addTradeRecord(record);
 
         return String.format(
@@ -228,15 +279,26 @@ public class EngineManager {
     }
 
     /**
-     * Command 5: Resolve and close an active event.
+     * Command 5: Resolve and close an active event. Only the MM who owns the
+     * event may close it.
      */
-    public String closeEvent(int eventId, int winningOptionIndex) {
+    public String closeEvent(int eventId, int winningOptionIndex, String username) {
         Event currentEvent = activeEvents.get(eventId);
         if (currentEvent == null) {
             return "Error: Event ID " + eventId + " does not exist.";
         }
 
-        currentEvent.close(winningOptionIndex);
+        User userMM = activeUsers.get(username);
+        if (userMM == null) {
+            return "User not found: " + username;
+        }
+        if (!userMM.isMarketMakerFor(eventId)) {
+            return "You are not the MM!";
+        }
+
+        if (!currentEvent.close(winningOptionIndex)) {
+            return "Event is not ACTIVE — cannot close it.";
+        }
 
         List<Integer> finalQuantities = new ArrayList<>();
         for (Option opt : currentEvent.getOptions()) {
@@ -247,9 +309,11 @@ public class EngineManager {
 
         if (currentEvent.getCommissionType().equals("on-close")) {
             double commissionAmount = totalPool * (currentEvent.getCommissionRate() / 100.0);
-            this.marketMakerBalance += commissionAmount;
             currentEvent.addCommission(commissionAmount);
             totalPool -= commissionAmount;
+
+
+            userMM.adjustBalance(+commissionAmount);
         }
 
         int winningShares = currentEvent.getOptions().get(winningOptionIndex).getShares();
@@ -257,6 +321,18 @@ public class EngineManager {
         if (winningShares > 0) {
             payoutPerShare = totalPool / winningShares;
         }
+
+
+        //PAY WINNERS
+        String winningOption = currentEvent.getOptions().get(winningOptionIndex).getName();
+        for(TradeRecord tradeRecord : currentEvent.getTradeHistory()){
+            if(tradeRecord.getOptionName().equals(winningOption)){
+                User holder = activeUsers.get(tradeRecord.getUsername());
+                holder.adjustBalance(+ payoutPerShare* tradeRecord.getQuantity());
+            }
+        }
+        //Adjust event pool
+        currentEvent.adjustAccountBalance(-totalPool);
 
         return String.format(
                 "Event Closed! Winning Option: %s%nTotal Pool (after fees): %.2f%nPayout per winning share: %.2f",

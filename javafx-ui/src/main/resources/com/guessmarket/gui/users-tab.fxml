@@ -2,11 +2,10 @@
 
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.SplitPane?>
-<?import javafx.scene.layout.VBox?>
 
 <!--
-  Placeholder shell — the engine has no User model yet (still-to-do Exercise 2
-  work), this just gives the Users tab something to include so it isn't blank.
+  Left: the user list (wired in UsersController). Right: selected user's
+  details (user-detail.fxml), matching the events-tab layout pattern.
 -->
 <SplitPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
            fx:controller="com.guessmarket.gui.controller.UsersController"
@@ -14,9 +13,6 @@
 
     <ListView fx:id="usersListView"/>
 
-    <VBox>
-        <!-- TODO: user detail panel (name, balance, active events...) once
-             the User model + engine support exists. -->
-    </VBox>
+    <fx:include fx:id="userDetail" source="user-detail.fxml"/>
 
 </SplitPane>
