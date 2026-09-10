@@ -25,6 +25,30 @@
             <artifactId>jaxb-runtime</artifactId>
             <version>4.0.9</version>
         </dependency>
+
+        <!-- Test-only: never touches the runtime classpath or the submission
+             lib/ folder (see the copy-dependencies excludeScope fix in
+             console-ui/pom.xml) — it's only needed to compile/run
+             src/test/java, not to run the actual app. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.3</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Pinned explicitly rather than relying on Maven's default
+                 lifecycle binding, which can lag behind — this version is
+                 needed for reliable JUnit 5 (JUnit Platform) auto-detection. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

@@ -58,6 +58,14 @@
                         </goals>
                         <configuration>
                             <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                            <!-- Without this, copy-dependencies pulls in every
+                                 scope including test — engine's JUnit
+                                 dependency (and its transitive jars) would
+                                 otherwise ship in the submission's lib/
+                                 folder for no reason (verified empirically:
+                                 confirmed junit-jupiter and 7 related jars
+                                 land here without this exclusion). -->
+                            <excludeScope>test</excludeScope>
                         </configuration>
                     </execution>
                 </executions>

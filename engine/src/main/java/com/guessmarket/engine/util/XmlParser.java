@@ -46,15 +46,32 @@ public class XmlParser {
 
         TradingMethod method;
         int bParameter;
+        boolean allowMint = false;
+        int initial = -1;
+        int d = -1;
         if (lmsr != null) {
             method = TradingMethod.LMSR;
             bParameter = lmsr.getB();
         } else {
             method = TradingMethod.ORDER_BOOK;
-            bParameter = 0; // unused until Order Book trading is implemented
+            bParameter = 0; // unused for Order Book — it has its own config below
+            allowMint = xmlEvent.getMethod().getGmOrderBook().getAllowMint();
+            initial = xmlEvent.getMethod().getGmOrderBook().getInitial();
+            d = xmlEvent.getMethod().getGmOrderBook().getD();
+
+            if(initial < 0 || d <= 0) {
+                throw new Exception("Initial value must be >= 0 and d > 0 ");
+            }
+
         }
 
-        return new Event(id, name, description, rate, optionsList, commissionType, bParameter, method);
+        Event event = new Event(id, name, description, rate, optionsList, commissionType, bParameter, method);
+
+        if(method == TradingMethod.ORDER_BOOK) {
+            event.setOrderBookConfig(allowMint,initial,d);
+        }
+
+        return event;
     }
 
     public static User mapToUser(GmUserXml xmlUser) throws Exception {

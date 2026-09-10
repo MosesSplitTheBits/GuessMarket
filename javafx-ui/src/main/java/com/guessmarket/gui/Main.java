@@ -20,8 +20,19 @@ public class Main extends Application {
 
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/guessmarket/gui/main-view.fxml"));
         Parent root = loader.load();
-        Scene scene = new Scene(root);
+
+        // Without an explicit size, JavaFX sizes the window from whatever
+        // content is showing at startup — before an event is selected, the
+        // detail pane is nearly empty, so the window starts small and never
+        // auto-grows later when a busier pane (like Order Book's) fills in.
+        // A sensible fixed starting size avoids that trap; minWidth/minHeight
+        // keep the window from being shrunk down to something no layout
+        // could reasonably handle (the spec requires resizing to work, not
+        // that it works at literally any size).
+        Scene scene = new Scene(root, 1200, 800);
         primaryStage.setScene(scene);
+        primaryStage.setMinWidth(900);
+        primaryStage.setMinHeight(600);
         primaryStage.setTitle("Guess Market");
         primaryStage.show();
 

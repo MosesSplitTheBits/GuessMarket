@@ -16,7 +16,7 @@
 -->
 <SplitPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
            fx:controller="com.guessmarket.gui.controller.EventsController"
-           dividerPositions="0.4">
+           dividerPositions="0.3">
 
     <VBox spacing="5">
         <VBox spacing="3">

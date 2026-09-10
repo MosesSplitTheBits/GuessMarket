@@ -27,6 +27,7 @@
     <ListView fx:id="activeEventsListView" prefHeight="120"/>
 
     <Label fx:id="eventInvolvementTitleLabel" style="-fx-font-weight: bold;"/>
+    <Label fx:id="holdingsLabel" wrapText="true"/>
     <ListView fx:id="tradeHistoryListView" VBox.vgrow="ALWAYS"/>
     <Label fx:id="closedSummaryLabel" wrapText="true"/>
 

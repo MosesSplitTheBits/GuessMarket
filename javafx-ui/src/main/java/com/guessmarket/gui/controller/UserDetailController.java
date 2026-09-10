@@ -4,6 +4,7 @@ import com.guessmarket.engine.model.Event;
 import com.guessmarket.engine.model.EventStatus;
 import com.guessmarket.engine.model.Option;
 import com.guessmarket.engine.model.TradeRecord;
+import com.guessmarket.engine.model.TradingMethod;
 import com.guessmarket.engine.model.User;
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
@@ -34,6 +35,9 @@ public class UserDetailController {
     private Label eventInvolvementTitleLabel;
 
     @FXML
+    private Label holdingsLabel;
+
+    @FXML
     private ListView<TradeRecord> tradeHistoryListView;
 
     @FXML
@@ -58,8 +62,8 @@ public class UserDetailController {
             protected void updateItem(TradeRecord trade, boolean empty) {
                 super.updateItem(trade, empty);
                 setText(empty || trade == null ? null : String.format(
-                        "%s — %d shares, price paid: %.2f, commission paid: %.2f",
-                        trade.getOptionName(), trade.getQuantity(), trade.getPricePaid(), trade.getCommissionAmount()));
+                        "%s %s — %d shares, price: %.2f, commission: %.2f",
+                        trade.getSide(), trade.getOptionName(), trade.getQuantity(), trade.getPricePaid(), trade.getCommissionAmount()));
             }
         });
 
@@ -111,6 +115,20 @@ public class UserDetailController {
 
         eventInvolvementTitleLabel.setText("Your trades in \"" + event.getName() + "\":");
 
+        if (event.getMethod() == TradingMethod.ORDER_BOOK) {
+            StringBuilder holdings = new StringBuilder("Current holdings: ");
+            for (int i = 0; i < event.getOptions().size(); i++) {
+                if (i > 0) {
+                    holdings.append(", ");
+                }
+                Option option = event.getOptions().get(i);
+                holdings.append(option.getName()).append('=').append(option.getHolding(currentUser.getName()));
+            }
+            holdingsLabel.setText(holdings.toString());
+        } else {
+            holdingsLabel.setText("");
+        }
+
         // Only this user's own rows, newest first — event.getTradeHistory()
         // is append-order (oldest first), so reverse the filtered copy.
         List<TradeRecord> ownTrades = new ArrayList<>();
@@ -137,6 +155,7 @@ public class UserDetailController {
 
     private void clearEventInvolvement() {
         eventInvolvementTitleLabel.setText("");
+        holdingsLabel.setText("");
         tradeHistoryListView.getItems().clear();
         closedSummaryLabel.setText("");
     }

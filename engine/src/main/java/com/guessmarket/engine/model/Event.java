@@ -23,6 +23,11 @@ public class Event {
     // LMSR specific
     private int bParameter;
 
+    // Order Book specific (GM-order-book: allow-mint, initial, d)
+    private boolean allowMint;
+    private int initialInvestment;
+    private int baseValue; // "d" — value paid per share of the winning option at close
+
     // The collection of options (Yes / No)
     private List<Option> options;
 
@@ -67,6 +72,29 @@ public class Event {
 
     public int getbParameter() {
         return this.bParameter;
+    }
+
+    /**
+     * Sets this event's Order Book configuration, parsed from GM-order-book.
+     * Called from XmlParser.mapToEvent for ORDER_BOOK events (mirrors how
+     * bParameter is set directly in the constructor for LMSR events).
+     */
+    public void setOrderBookConfig(boolean allowMint, int initialInvestment, int baseValue) {
+        this.allowMint = allowMint;
+        this.initialInvestment = initialInvestment;
+        this.baseValue = baseValue;
+    }
+
+    public boolean isAllowMint() {
+        return allowMint;
+    }
+
+    public int getInitialInvestment() {
+        return initialInvestment;
+    }
+
+    public int getBaseValue() {
+        return baseValue;
     }
 
     public Integer getId() {

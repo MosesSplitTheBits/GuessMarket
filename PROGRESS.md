@@ -45,8 +45,9 @@ for Ex1, `javafx-ui` for Ex2 onward.
   `docs/xml_tests/{multiple,small,error-2}.xml` (all still load — no
   regression) plus two new scratch fixtures, one with an unassigned event and
   one with two users claiming the same event (both correctly rejected).
-- [ ] Order Book schema (`GM-order-book`: `allow-mint`, `initial`, `d`) — no
-  `GmOrderBookXml` class exists yet; only `GmLmsrXml`/`GmMethodXml` are parsed
+- [ ] Order Book schema (`GM-order-book`: `allow-mint`, `initial`, `d`) —
+  `GmOrderBookXml` scaffolded with a TODO (2026-09-10) but not yet filled in;
+  see "Order Book mechanism" below
 
 **Users / accounts**
 - [x] `User` model (balance, blocked flag, managed-event-ids) exists and loads
@@ -156,9 +157,9 @@ for Ex1, `javafx-ui` for Ex2 onward.
   `activeUsers.get(username)` — the *buyer* — instead of the MM via
   `currentEvent.getOwnerUsername()`, so the commission netted to zero and
   never reached the MM); Daniel fixed it himself, re-reviewed correct.
-- [ ] `buyShares`/`closeEvent` always run LMSR math unconditionally — neither
-  branches on `Event.getMethod()`, so an Order Book event would be traded as if it
-  were LMSR
+- [x] `buyShares`/`closeEvent` now branch on `Event.getMethod()` (2026-09-10)
+  — `buyShares` rejects Order Book events outright; `closeEvent` delegates to
+  a separate `closeOrderBookEvent` for them. See "Order Book mechanism" below.
 - [x] `closeEvent` (2026-09-09) — takes a `username` param, checks MM
   authorization (same pattern as `activateEvent`), honors the boolean
   `Event.close(...)` returns, routes on-close commission to the MM's balance,
@@ -175,13 +176,108 @@ for Ex1, `javafx-ui` for Ex2 onward.
   field reference, but is not reliable in general; fixed (by Claude, at
   Daniel's request) to `.equals()`.
 
-**Order Book mechanism (Appendix ב)**
-- [ ] Not started at all: no `Order`/`OrderBook` model classes, no bid/ask
-  matching, no mint logic, no per-user per-event share-holdings tracking (needed
-  for both OB trading and the OB participant/holdings display)
-- Per spec's own recommended build order (`docs/assignment-spec.md` line 738),
-  this is meant to be tackled *last*, after the JFX shell + LMSR + Users path is
-  fully working.
+**Order Book mechanism (Appendix ב)** — 2026-09-10 session, engine + UI mostly
+done, two self-contained pieces deliberately left as TODOs for Daniel to write:
+
+- [x] Design validated against `docs/xml_tests/clob_simulation.html` (a
+  simulation Daniel added mid-session, uploaded to Mama per spec line 1141) —
+  confirmed price bounds (`0.01` to `d-0.01`), match-at-resting-price
+  behavior, multi-level walk-through-the-book fills, the peer-to-peer mint
+  mechanic (resting order fills at its own price, incoming order pays
+  `d - restingPrice`), on-purchase commission charged to *both* sides of a
+  mint, on-close commission math, and "cancel everything still resting" at
+  close. Daniel's call: same-option match is tried before cross-option mint
+  when both are possible.
+- [x] `OrderSide` enum, `Order` (resting bid/ask, price-time priority via a
+  monotonic sequence number, not wall-clock), `OrderBook` (per-option sorted
+  bid/ask lists + last-trade price + bid/ask/mid/spread accessors) —
+  `engine/.../model/`
+- [x] `Option` now carries an `OrderBook` and a per-user holdings map
+  (`getHolding`/`addHolding`/`removeHolding`/`getAllHoldings`) — Order Book
+  needs this because, unlike LMSR, it allows selling, so a user's current
+  position can't be derived by just summing buy-only `TradeRecord` history
+  anymore.
+- [x] `Event` carries `allowMint`/`initialInvestment`/`baseValue` (the XML's
+  `allow-mint`/`initial`/`d`) via `setOrderBookConfig(...)`.
+- [x] `TradeRecord` gained an `OrderSide side` field (new constructor
+  overload; the old one defaults to `BUY`, so every existing LMSR call site
+  is untouched) so Order Book fills can show as BUY or SELL in trade history.
+- [x] `EngineManager.activateEvent` — Order Book branch: checks the MM can
+  afford `initialInvestment`, debits them, credits the event's pool, and
+  mints `initialInvestment / baseValue` pairs straight into the MM's
+  holdings on both options (logged as `TradeRecord`s too, so the MM shows up
+  as an "active" participant immediately).
+- [x] `EngineManager.placeOrder(eventId, optionIndex, side, quantity, price, username)`
+  — new method (not a `buyShares` overload, since the parameter shape is
+  genuinely different): validates price bounds/holdings, then loops
+  match-same-option-first / mint-if-allowed-and-BUY / rest-the-remainder,
+  same order the simulation demonstrates. `buyShares` now rejects Order Book
+  events outright ("use Place Order instead") instead of running LMSR math
+  on them.
+- [x] `EngineManager.closeEvent` branches to a new `closeOrderBookEvent` for
+  Order Book: since every share was minted at a cost of exactly `d` per pair
+  and matches never touch the event's pooled cash (buyer pays seller
+  directly), `winningShares * d` always exactly equals the pool — no LMSR-style
+  leftover to worry about. Commission-on-close carves out of that pool before
+  splitting it across winning holders (read from `Option.holdings`, not
+  `TradeRecord` history); all resting orders on both options are cancelled.
+- [x] UI: `EventDetailController`'s Order Book option pane now shows live
+  last/bid/ask/mid/spread, the resting bids/asks themselves, the acting
+  user's own holdings, and a BUY/SELL + quantity + price form wired to
+  `placeOrder`. A new participant-holdings panel (event-detail.fxml) lists
+  every holder's shares per option, valued at mid-price (deliberately *not*
+  at `d` — a share is only worth `d` if it wins; spec's own text on OB
+  pricing ambiguity backs this call). `UserDetailController` shows the
+  selected user's current per-option holdings for Order Book events too.
+  `mvn compile` clean on both modules; app launches with no
+  `FXMLLoadException` (checked via a background `javafx:run`, not
+  click-tested — no GUI automation tool in this session).
+- [ ] **Left for Daniel** (scaffolded with TODO comments pointing at the
+  exact patterns to mirror — his choice, to keep the XML-parsing and
+  holdings-map pieces hands-on): `GmOrderBookXml` (mirror `GmLmsrXml`, but
+  `allow-mint`/`initial`/`d` are all `@XmlAttribute`, like `CommissionXml`'s
+  `type`), wiring it into `GmMethodXml` (one field + getter, same shape as
+  the GM-LMSR one), and `XmlParser.mapToEvent`'s Order Book branch (call
+  `event.setOrderBookConfig(...)`, validate `d > 0` — a zero divides by zero
+  in `activateEvent`/`placeOrder`). Plus `Option.getHolding`/`addHolding`/
+  `removeHolding` themselves (currently `throw new
+  UnsupportedOperationException("TODO...")`) — everything in the engine and
+  UI already calls these with the exact signatures needed, so once they're
+  filled in the whole feature should light up end-to-end.
+- [x] **Verified against `clob_simulation.html`'s exact numbers (2026-09-10)**,
+  once Daniel's TODOs above were filled in (see below — one real bug found
+  and fixed along the way in `XmlParser`). Two new fixtures,
+  `docs/xml_tests/clob_sim_purchase.xml`/`clob_sim_close.xml`, reproduce the
+  simulation's event (Zoe/Alice/Bob/Carol, d=1, initial=100, allow-mint=true)
+  once each with on-purchase vs. on-close commission. A scratch driver
+  replayed the simulation's exact order sequence (Bob/Carol's YES bids,
+  Zoe's asks on both options, Alice's matched buy, Zoe's multi-level sell
+  into the bids, Carol's NO bid, Alice's peer-mint buy, Bob's
+  out-of-bounds rejected order, Bob's unmatched NO ask, then close) through
+  the real `EngineManager`, then closed the event with YES winning.
+  Final balances matched the simulation's own `computeState` output to 4
+  decimal places in **both** commission modes:
+  on-purchase — Zoe 486.3055, Alice 224.8520, Bob 198.5375, Carol 190.3050,
+  total commission 0.7555; on-close — Zoe 486.4500, Alice 224.6000,
+  Bob 198.5500, Carol 190.4000, total commission 1.3500. The out-of-bounds
+  order was correctly rejected before ever touching the book. Both totals
+  sum to exactly 1100 (the four starting balances), confirming no money
+  was created or destroyed.
+- **Bug found and fixed during Daniel's TODO work**: his first pass at the
+  `XmlParser.mapToEvent` Order Book branch computed `allowMint`/`initial`/`d`
+  unconditionally after the `if (lmsr != null)/else` block instead of only
+  when `method == ORDER_BOOK`, which NPE'd on `getGmOrderBook()` for every
+  LMSR event (confirmed by trying to load `small.xml`, which mixes both
+  methods). Fixed in two steps, talked through rather than shown outright:
+  (1) declare the three variables with default values before the `if/else`
+  so every path definitely assigns them (mirroring how `method`/`bParameter`
+  already do this a few lines up) — this fixed the compiler's
+  definite-assignment error; (2) still needed an explicit
+  `if (method == ORDER_BOOK)` guard around the `setOrderBookConfig(...)`
+  call itself, since without it every LMSR event silently got contaminated
+  with sentinel `-1`/`false` config values instead of its natural `0`/`false`
+  defaults. Daniel fixed both himself after each was explained; verified via
+  a scratch load of `small.xml` before and after.
 
 ### Exercise 3 — client-server (not started)
 - Schema differences and requirements are described in `docs/assignment-spec.md`
@@ -190,42 +286,64 @@ for Ex1, `javafx-ui` for Ex2 onward.
 
 ## Test status
 
-- **No automated test framework is wired up.** No `junit` dependency in any
-  `pom.xml`, no test classes under any `src/test/java`.
-- `engine/src/test/resources/` holds XML fixtures (`test_events.xml`,
-  `samples/valid_single_event.xml`, `samples/valid_multi_event.xml`,
-  `samples/invalid_duplicate_id.xml`, `samples/invalid_commission_out_of_range.xml`)
-  but nothing currently consumes them — they look staged for JUnit tests that were
-  never written, or for manual loading.
-- `docs/xml_tests/` (`small.xml`, `multiple.xml`, `error-2.xml`, `error-3.xml`) —
-  likely Daniel's manual Ex2 test files (untracked, `?? docs/xml_tests/` in git
-  status); also not run by any automated suite.
+- **JUnit 5 is now wired up (2026-09-10)**, `engine` module only:
+  `junit-jupiter` 5.11.3 added to `engine/pom.xml` as a **test-scoped**
+  dependency, `maven-surefire-plugin` 3.2.5 pinned explicitly (not relying
+  on Maven's default lifecycle binding, for reliable JUnit 5 auto-detection).
+  Run via `mvn test` (or `-pl engine test` from the root).
+- **Packaging check, done before adding JUnit rather than after**: verified
+  empirically (temporarily adding the dependency and running the exact
+  `maven-dependency-plugin:copy-dependencies` goal `console-ui/pom.xml`
+  uses) that without an explicit scope filter, this goal copies **all**
+  scopes including `test` — junit-jupiter and 7 transitive jars landed in
+  the output folder. Fixed by adding `<excludeScope>test</excludeScope>` to
+  `console-ui/pom.xml`'s `copy-dependencies` execution; re-verified
+  afterward that its `lib/` output now contains only the real runtime jars
+  (engine + JAXB). `javafx-ui`'s own submission packaging doesn't exist yet
+  (per that pom's comment, "a separate concern we'll solve later") — when
+  it's built, it needs the same `excludeScope test` from the start.
+- **`EngineManagerOrderBookTest`** (`engine/src/test/java/.../api/`) — the
+  first real test class in the project. Replays the exact scenario from
+  `docs/xml_tests/clob_simulation.html` (fixtures copied into
+  `engine/src/test/resources/` as `clob_sim_purchase.xml`/`clob_sim_close.xml`)
+  through the real `EngineManager`: resting bids/asks, a match, a partial
+  fill, a sell order walking two bid levels, a peer-to-peer mint with a
+  partial rest, an out-of-bounds rejection, and final resolution. Three
+  tests, all passing: on-purchase commission, on-close commission (both
+  asserting final balances to 4 decimals against the simulation's own
+  numbers, commission totals, and that money is conserved — the four
+  balances always sum to exactly 1100), and a focused test that a
+  rejected order never touches the book.
+- `engine/src/test/resources/` also holds older, still-unused fixtures
+  (`test_events.xml`, `samples/valid_single_event.xml`,
+  `samples/valid_multi_event.xml`, `samples/invalid_duplicate_id.xml`,
+  `samples/invalid_commission_out_of_range.xml`) — still nothing consumes
+  these; could become `XmlParser`/load-validation tests using the same
+  pattern `EngineManagerOrderBookTest` now establishes.
+- `docs/xml_tests/` (`small.xml`, `multiple.xml`, `error-2.xml`, `error-3.xml`,
+  `clob_simulation.html`, plus the two `clob_sim_*.xml` files — also kept
+  here, alongside their `engine/src/test/resources/` copies, for manual
+  GUI-driven testing) — Daniel's manual Ex2 test files (untracked, `??
+  docs/xml_tests/` in git status); not run by any automated suite.
 - Ex1 was manually verified against the 4 official Mama sample files (per
   `CLAUDE.md`), not via automated tests.
-- **Gap**: no regression safety net for the trading-logic rewrite ahead (accounts,
-  balances, Order Book) — worth considering whether to add JUnit now, given how
-  much of `EngineManager` is about to change.
 
 ## Next up
 
-The full LMSR + Users path (file loading/validation, Users tab, Events tab +
-filters, activate/buy/close) is now solid end-to-end, click-tested by
-Daniel. Per spec's own recommended build order (line 738), **Order Book is
-next** — deliberately last, now that everything it doesn't touch is done:
+Order Book is functionally complete and verified end-to-end (2026-09-10) —
+engine, UI, Daniel's TODOs, and now a real JUnit regression test. What's
+left before Ex2 is fully done:
 
-1. `GmOrderBookXml` parsing (`allow-mint`, `initial`, `d` — schema described
-   in Appendix ב) so `XmlParser.mapToEvent` can read OB-specific config
-   instead of just recognizing the method exists.
-2. `Order`/`OrderBook` model classes: bid/ask book, matching logic, mint
-   logic, per-user per-event share-holdings tracking (needed for OB trading
-   *and* the OB participant/holdings display — nothing tracks holdings for
-   OB the way LMSR now does via `TradeRecord`).
-3. Make `buyShares`/`closeEvent` branch on `Event.getMethod()` instead of
-   always running LMSR math unconditionally (existing known issue below) —
-   OB events need their own trading path through these, not a shared one.
-4. OB detail/holdings UI in `EventDetailController`'s option panes (currently
-   just a placeholder note) and the OB half of spec lines 610-616 in the
-   Users-tab detail view.
+1. A manual click-test pass of the actual JavaFX UI (activate → place orders
+   — match, partial fill, mint, rejection → close), on both an on-purchase
+   and an on-close commission event — the engine math is proven correct by
+   `EngineManagerOrderBookTest`, but the OB option pane / participant-holdings
+   panel / place-order form itself haven't been click-tested by a human yet.
+   Daniel ran the app and saw the GUI (2026-09-10) and is now making some UI
+   modifications — revisit this once those land.
+2. Once Ex2 is fully done: a `console-ui`-style submission readme (per
+   `CLAUDE.md`), and remember `javafx-ui`'s eventual packaging setup needs
+   `excludeScope test` from the start (see Test status above).
 
 ## Known issues / TODOs in code
 
@@ -233,20 +351,12 @@ next** — deliberately last, now that everything it doesn't touch is done:
   (noted in `CLAUDE.md`) — worth a `git status` check before assuming a session's
   work is fully pushed; IntelliJ's Commit window separates brand-new files into an
   easy-to-miss "Unversioned Files" group.
-- **As of 2026-09-09 end of session, the entire Users/Events/trading-controls
-  work above is still uncommitted** — `git status` shows 10 modified files
-  (`PROGRESS.md`, `EngineManager`/`Event`/`TradeRecord` in `engine`,
-  `EventDetailController`/`EventsController`/`MainController`/`UsersController`
-  + `event-detail.fxml`/`events-tab.fxml`/`users-tab.fxml` in `javafx-ui`)
-  **plus 2 brand-new untracked files**: `UserDetailController.java` and
-  `user-detail.fxml`. Untracked files are exactly the sharp edge `CLAUDE.md`
-  already warns about — IntelliJ's Commit window puts them in a separate
-  "Unversioned Files" group that's easy to miss, so double-check both are
-  included before committing. Everything above is verified compiling and
-  click-tested working, so there's no reason to leave it uncommitted going
-  into next session — worth committing (and considering a `console-ui`-style
-  submission readme once Ex2 is otherwise done) before starting Order Book.
-  `console-ui`'s Ex1-era `closeEvent(eventId, winningOptionIndex)` call site
-  is now doubly stale (missing the `username` param too) but stays harmless
-  since the module is excluded from the reactor.
+- `console-ui`'s Ex1-era `closeEvent(eventId, winningOptionIndex)` call site
+  is stale (missing the `username` param, and now also LMSR-only vs. the
+  engine's branching) but stays harmless since the module is excluded from
+  the reactor.
+- Order Book has no self-trade prevention (a user's own resting order can
+  match or mint against their own new order) and no order-cancellation
+  command — neither is required by the spec, but worth knowing they're
+  absent if a grader probes for them.
 
