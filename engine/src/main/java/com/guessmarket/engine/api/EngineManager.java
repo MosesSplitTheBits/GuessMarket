@@ -240,16 +240,11 @@ public class EngineManager {
             return "This event uses Order Book trading — use Place Order instead.";
         }
 
-        // TODO: look up the User by username (same pattern as activateEvent).
-        //       If null, return an error message.
-        User user =  activeUsers.get(username);
+        User user = activeUsers.get(username);
         if(user == null){return "User not found: " + username;}
 
-        // TODO: reject if user.isBlocked() — a blocked user can't trade.
         if(user.isBlocked()){return "User is blocked!";}
 
-        // TODO: reject if currentEvent.getStatus() != EventStatus.ACTIVE —
-        //       can't buy shares in an event that hasn't started yet or is closed.
         if(currentEvent.getStatus() != EventStatus.ACTIVE){return "Event is not active!";}
 
         List<Integer> oldQuantities = new ArrayList<>();
@@ -272,18 +267,11 @@ public class EngineManager {
             commissionAmount = tradeCost * (currentEvent.getCommissionRate() / 100.0);
             currentEvent.addCommission(commissionAmount);
 
-            // TODO: credit commissionAmount to the MM's own balance, not the
-            //       event account — look up the MM via
-            //       activeUsers.get(currentEvent.getOwnerUsername()) and call
-            //       mm.adjustBalance(+commissionAmount).
             User userMM = activeUsers.get(currentEvent.getOwnerUsername());
             if(userMM == null){return "User not found: " + username;}
             userMM.adjustBalance(+commissionAmount);
         }
 
-        // TODO: credit tradeCost (not commissionAmount) into the event's own
-        //       pooled account via currentEvent.adjustAccountBalance(tradeCost)
-        //       — this is the money that backs the payout at close time.
         currentEvent.adjustAccountBalance(tradeCost);
 
         currentEvent.getOptions().get(optionIndex).addShares(amount);
@@ -291,8 +279,6 @@ public class EngineManager {
         String optionName = currentEvent.getOptions().get(optionIndex).getName();
         double totalPaid = tradeCost + commissionAmount;
 
-        // TODO: deduct totalPaid from the user's balance via user.adjustBalance(-totalPaid).
-        //       adjustBalance already flips the user to blocked if this takes them negative.
         user.adjustBalance(-totalPaid);
 
         TradeRecord record = new TradeRecord(System.currentTimeMillis(), optionName, amount, tradeCost, commissionAmount, username);

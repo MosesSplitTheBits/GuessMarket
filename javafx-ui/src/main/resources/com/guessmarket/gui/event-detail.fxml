@@ -34,7 +34,8 @@
         <Insets top="10" right="10" bottom="10" left="10"/>
     </padding>
 
-    <Label fx:id="eventTitleLabel" text="Select an event" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+    <Label fx:id="eventTitleLabel" text="Select an event"
+           style="-fx-font-size: 24px; -fx-font-weight: bold; -fx-border-color: transparent transparent #888888 transparent; -fx-border-width: 0 0 2 0; -fx-padding: 0 0 6 0;"/>
     <HBox spacing="10" alignment="CENTER_LEFT">
         <Label fx:id="eventStatusLabel"/>
         <Button fx:id="activateButton" text="Activate Event" onAction="#handleActivate"/>

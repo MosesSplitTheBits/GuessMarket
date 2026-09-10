@@ -20,7 +20,8 @@
         <Insets top="10" right="10" bottom="10" left="10"/>
     </padding>
 
-    <Label fx:id="userNameLabel" text="Select a user" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+    <Label fx:id="userNameLabel" text="Select a user"
+           style="-fx-font-size: 24px; -fx-font-weight: bold; -fx-border-color: transparent transparent #888888 transparent; -fx-border-width: 0 0 2 0; -fx-padding: 0 0 6 0;"/>
     <Label fx:id="userBalanceLabel"/>
 
     <Label text="Active events:" style="-fx-font-weight: bold;"/>

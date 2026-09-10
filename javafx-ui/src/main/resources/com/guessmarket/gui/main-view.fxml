@@ -27,23 +27,22 @@
             <Button fx:id="loadFileButton" text="Load File" onAction="#handleLoadFile"/>
             <Label fx:id="filePathLabel" text="No file loaded"/>
             <ProgressBar fx:id="loadProgressBar" progress="0" visible="false"/>
-            <!-- A growing Region on each side of the "Acting as" group splits
-                 the leftover space evenly, hugging the group toward the middle
-                 instead of pushing it all the way to the right. -->
-            <Region HBox.hgrow="ALWAYS"/>
             <Label text="Acting as:"/>
             <ComboBox fx:id="currentUserComboBox" promptText="Select user"/>
             <Label fx:id="currentUserLabel" text="Hello, guest"/>
+            <!-- Trailing Region absorbs the leftover space, keeping this
+                 whole group hugged to the left next to Load File instead of
+                 spreading out across the bar. -->
             <Region HBox.hgrow="ALWAYS"/>
         </HBox>
     </top>
 
     <center>
         <TabPane fx:id="mainTabPane">
-            <Tab text="Events" closable="false">
+            <Tab text="Events" closable="false" style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-padding: 8 24 8 24;">
                 <fx:include fx:id="eventsTab" source="events-tab.fxml"/>
             </Tab>
-            <Tab text="Users" closable="false">
+            <Tab text="Users" closable="false" style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-padding: 8 24 8 24;">
                 <fx:include fx:id="usersTab" source="users-tab.fxml"/>
             </Tab>
         </TabPane>

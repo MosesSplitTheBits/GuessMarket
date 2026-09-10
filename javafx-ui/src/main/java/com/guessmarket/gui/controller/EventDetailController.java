@@ -116,6 +116,7 @@ public class EventDetailController {
         if (event == null) {
             eventTitleLabel.setText("Select Event");
             eventStatusLabel.setText("");
+            eventStatusLabel.setStyle("");
             activateButton.setDisable(true);
             optionOnePane.getChildren().clear();
             optionTwoPane.getChildren().clear();
@@ -135,6 +136,10 @@ public class EventDetailController {
         } else {
             eventStatusLabel.setText("Status: " + event.getStatus());
         }
+        // Explicitly set on every status (not just NOT_STARTED/ACTIVE) so a
+        // color from a previously-selected event's status never lingers —
+        // setStyle persists on the Label until something overwrites it.
+        eventStatusLabel.setStyle(statusColorStyle(event.getStatus()));
 
         User actingUser = currentUserSupplier != null ? currentUserSupplier.get() : null;
         boolean canActivate = event.getStatus() == EventStatus.NOT_STARTED
@@ -162,6 +167,14 @@ public class EventDetailController {
         List<TradeRecord> trades = new ArrayList<>(event.getTradeHistory());
         Collections.reverse(trades);
         tradeHistoryListView.getItems().setAll(trades);
+    }
+
+    private String statusColorStyle(EventStatus status) {
+        return switch (status) {
+            case NOT_STARTED -> "-fx-text-fill: red; -fx-font-weight: bold;";
+            case ACTIVE -> "-fx-text-fill: green; -fx-font-weight: bold;";
+            case CLOSED -> "-fx-text-fill: #444444; -fx-font-weight: bold;";
+        };
     }
 
     private void showOptionPane(VBox pane, Event event, int optionIndex) {
