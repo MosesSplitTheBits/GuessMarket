@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Guess-Market xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="GM-EX1-schema.xsd">
+<Guess-Market>
     <GM-events>
         <GM-event name="Earth Quake on Dead Sea">
             <id>3</id>
