@@ -36,10 +36,10 @@ public class EngineManager {
     }
 
     // ==========================================
-    // 2. BEHAVIORS (The API for the Console UI)
+    // 2. BEHAVIORS (The API for console-ui / javafx-ui)
     // ==========================================
-    // Every method here RETURNS a message describing what happened
-    // Rather than printing. Will be changed in excercise 2. Works for now....
+    // Every method here RETURNS a message describing what happened,
+    // rather than printing.
 
     /**
      * Command 1: Load event data from an XML file.

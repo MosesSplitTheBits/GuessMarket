@@ -9,7 +9,6 @@ import java.io.File;
  * Runs EngineManager.loadDataFromXml(...) off the JavaFX Application Thread.
  * The spec requires a visible progress indicator during load, plus a short
  * artificial delay (the real parse is too fast to actually see progress on).
- * We'll walk through Task's threading model properly before filling this in.
  */
 public class LoadFileTask extends Task<String> {
 

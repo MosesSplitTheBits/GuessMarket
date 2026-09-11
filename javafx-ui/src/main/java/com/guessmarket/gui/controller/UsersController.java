@@ -9,9 +9,8 @@ import javafx.scene.control.ListView;
 import java.util.List;
 
 /**
- * Controller for users-tab.fxml — the left-hand user list. Detail panel
- * (balance, active events, trade history) is still a placeholder VBox in the
- * FXML; that's separate follow-up work, not just a list-wiring fix.
+ * Controller for users-tab.fxml — the left-hand user list, plus the
+ * right-hand detail panel (user-detail.fxml, included here).
  */
 public class UsersController {
 
