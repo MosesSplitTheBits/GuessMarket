@@ -9,9 +9,6 @@ public class GmEventXml {
     @XmlAttribute(name = "name")
     private String name;
 
-    @XmlElement(name = "id")
-    private int id;
-
     @XmlElement(name = "description")
     private String description;
 
@@ -35,10 +32,6 @@ public class GmEventXml {
 
     public CommissionXml getCommission() {
         return commission;
-    }
-
-    public int getId() {
-        return id;
     }
 
     public List<String> getOptions() {

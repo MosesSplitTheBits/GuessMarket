@@ -2,6 +2,7 @@ package com.guessmarket.engine.api;
 
 import com.guessmarket.engine.model.*;
 
+import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
@@ -10,171 +11,193 @@ import java.util.ArrayList;
 import com.guessmarket.engine.util.XmlParser;
 import com.guessmarket.engine.util.LmsrCalculator;
 import com.guessmarket.engine.xml.GmEventXml;
-import com.guessmarket.engine.xml.GmUserXml;
 import com.guessmarket.engine.xml.GuessMarketXml;
 import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
-import java.io.File;
 
+/**
+ * The whole Guess Market system state and rules. Passive: never prints,
+ * never reads input. Every action either returns a user-facing success
+ * message or throws EngineException with a user-facing failure message
+ */
 public class EngineManager {
+
 
     // ==========================================
     // 1. STATE (The Memory)
     // ==========================================
 
-    // A map to quickly look up an Event by its ID.
-    // LinkedHashMap (not HashMap) so events keep a stable, predictable
-    // iteration order — the order they were loaded in — which the UI
-    // relies on for showing a consistent numbered list.
-    private final Map<Integer, Event> activeEvents;
+    // JAXBContext is expensive to build and thread-safe once built, so one
+    // shared instance is created up front. (Unmarshaller is NOT thread-safe,
+    // so a fresh one is made per upload.)
+    private static final JAXBContext JAXB_CONTEXT = createJaxbContext();
+
+    // Ex3: events are keyed by NAME — schema v3 has no event id, and events
+    // from different uploaded files are told apart only by their names.
+    // LinkedHashMap keeps a stable, predictable order (upload order) for the UI.
+    private final Map<String, Event> activeEvents;
     private final Map<String, User> activeUsers;
 
-    // Constructor to initialize a clean slate
     public EngineManager() {
         this.activeEvents = new LinkedHashMap<>();
         this.activeUsers = new LinkedHashMap<>();
     }
 
-    // ==========================================
-    // 2. BEHAVIORS (The API for console-ui / javafx-ui)
-    // ==========================================
-    // Every method here RETURNS a message describing what happened,
-    // rather than printing.
-
-    /**
-     * Command 1: Load event data from an XML file.
-     * The new file is fully parsed and validated into temporary storage
-     * first; only if the entire file loads cleanly does it become the
-     * real state. An invalid file never overwrites the last valid load.
-     */
-    public String loadDataFromXml(String filePath) {
-        File xmlFile = new File(filePath);
-
-        if (!xmlFile.exists()) {
-            return "File not found: " + filePath;
-        }
-
-        if (!xmlFile.getName().toLowerCase().endsWith(".xml")) {
-            return "File is not an XML file (must end in .xml): " + filePath;
-        }
-
+    private static JAXBContext createJaxbContext() {
         try {
-            JAXBContext context = JAXBContext.newInstance(GuessMarketXml.class);
-            Unmarshaller unmarshaller = context.createUnmarshaller();
-            GuessMarketXml root = (GuessMarketXml) unmarshaller.unmarshal(xmlFile);
-
-            // Build the new state into temporary storage first.
-            Map<Integer, Event> tempEvents = new LinkedHashMap<>();
-
-            for (GmEventXml xmlEvent : root.getEvents()) {
-                Event event = XmlParser.mapToEvent(xmlEvent);
-
-                if (tempEvents.containsKey(event.getId())) {
-                    throw new Exception("Duplicate Event ID found: " + event.getId());
-                }
-
-                tempEvents.put(event.getId(), event);
-            }
-
-            //Check if userlist is correct, only then pushes it to app
-            Map<String, User> tempUsers = new LinkedHashMap<>();
-            // Tracks which user was already assigned as MM for each event ID,
-            // so a second user claiming the same event is caught as an error
-            // instead of silently overwriting the first via setOwnerUsername.
-            Map<Integer, String> eventOwners = new LinkedHashMap<>();
-            for(GmUserXml xmlUser : root.getUsers()) {
-                User user = XmlParser.mapToUser(xmlUser);
-
-                if(tempUsers.containsKey(user.getName()))
-                {
-                    throw new Exception("Duplicate User name found: " + user.getName());
-                }
-
-
-
-                for(int eventId : user.getManagedEventIds())
-                {
-                    Event event = tempEvents.get(eventId);
-                    if(event == null)
-                    {
-                        throw new Exception("Event with id " + eventId + " not found");
-                    }
-                    if(eventOwners.containsKey(eventId))
-                    {
-                        throw new Exception("Event " + eventId + " has more than one MM assigned: "
-                                + eventOwners.get(eventId) + " and " + user.getName());
-                    }
-                    eventOwners.put(eventId, user.getName());
-                    event.setOwnerUsername(user.getName());
-                }
-
-                tempUsers.put(user.getName(), user);
-            }
-
-            // Spec requires every event to have exactly one MM assigned from
-            // the file's users — the loop above already rejects more than
-            // one, this catches events nobody claimed at all.
-            for (Event event : tempEvents.values()) {
-                if (!eventOwners.containsKey(event.getId())) {
-                    throw new Exception("Event " + event.getId() + " has no MM assigned to it.");
-                }
-            }
-
-
-            // Every event parsed and validated cleanly — commit the new state.
-            // (No subsidy is paid here: each event's LMSR subsidy is now debited
-            // from its own MM's balance in activateEvent, not upfront for all
-            // events at once — see activateEvent.)
-            this.activeEvents.clear();
-            this.activeEvents.putAll(tempEvents);
-            this.activeUsers.clear();
-            this.activeUsers.putAll(tempUsers);
-
-            return "XML loaded successfully! Total events: " + activeEvents.size();
-
-        } catch (Exception e) {
-            return "Error loading XML file: " + e.getMessage();
+            return JAXBContext.newInstance(GuessMarketXml.class);
+        } catch (JAXBException e) {
+            throw new IllegalStateException("JAXB setup failed", e);
         }
     }
 
-    /**
-     * Command 2: Retrieve all events to display to the user
-     */
-    public List<Event> getAllEvents() {
-        return new ArrayList<>(activeEvents.values());
-    }
+    // ==========================================
+    // 2. USERS
+    // ==========================================
 
     /**
-     * Command 3: Retrieve the current trading status and history of a specific event.
+     * Ex3 login: registers a brand-new user with an empty account.
+     * Usernames are unique (spec); surrounding spaces are ignored.
      */
-    public Event getEventDetails(int eventId) {
-        return activeEvents.get(eventId);
+    public synchronized User registerUser(String rawName) {
+        String name = rawName == null ? "" : rawName.trim();
+        if (name.isEmpty()) {
+            throw new EngineException("Username must not be empty.");
+        }
+        if (activeUsers.containsKey(name)) {
+            throw new EngineException("Username '" + name + "' is already taken. Please choose another name.");
+        }
+        User user = new User(name);
+        activeUsers.put(name, user);
+        return user;
     }
 
-    public List<User> getAllUsers() {
+    public synchronized boolean isUserExists(String username) {
+        return activeUsers.containsKey(username);
+    }
+
+    /** Ex3: a user tops up their own account. */
+    public synchronized String deposit(String username, double amount) {
+        User user = requireUser(username);
+        if (!(amount > 0)) { // also rejects NaN
+            throw new EngineException("Deposit amount must be positive.");
+        }
+        user.adjustBalance(+amount, "Deposit");
+        return String.format("Deposited %.2f. New balance: %.2f", amount, user.getBalance());
+    }
+
+    public synchronized List<User> getAllUsers() {
         return new ArrayList<>(activeUsers.values());
     }
 
-    public User getUserDetails(String username) {
+    public synchronized User getUserDetails(String username) {
         return activeUsers.get(username);
     }
+
+    /**
+     * Delta fetch for the account ledger: only the lines from index
+     * {@code fromIndex} onward, so a polling client doesn't re-download its
+     * whole history every half second. The client's next fromIndex is
+     * fromIndex + (number of lines returned).
+     */
+    public synchronized List<LedgerEntry> getLedger(String username, int fromIndex) {
+        User user = requireUser(username);
+        List<LedgerEntry> ledger = user.getLedger();
+        if (fromIndex < 0 || fromIndex > ledger.size()) {
+            fromIndex = 0;
+        }
+        return new ArrayList<LedgerEntry>(ledger.subList(fromIndex,ledger.size()));
+    }
+
+    // ==========================================
+    // 3. LOADING EVENTS
+    // ==========================================
+
+    /**
+     * Ex3 upload: ADDS the events in this file to the system (files now
+     * accumulate instead of replacing each other), with the uploader as MM
+     * of every one of them.
+     *
+     * Rollback-safe, same idea as Ex1/Ex2: the whole file is parsed and
+     * validated into temporary storage first; only if every event passes
+     * does anything touch live state. A bad file — or one clashing with an
+     * already-loaded event name — changes nothing.
+     *
+     * Takes a stream, not a file path: the server must never write the
+     * uploaded file to disk (spec), so it hands the request body straight in.
+     */
+    public synchronized String loadEventsFromXml(InputStream xmlContent, String uploaderName) {
+        User uploader = requireUser(uploaderName);
+
+        GuessMarketXml root;
+        try {
+            Unmarshaller unmarshaller = JAXB_CONTEXT.createUnmarshaller();
+            root = (GuessMarketXml) unmarshaller.unmarshal(xmlContent);
+        } catch (JAXBException | ClassCastException e) {
+            throw new EngineException("File is not a valid Guess Market XML file.");
+        }
+
+        if (root == null || root.getEvents() == null || root.getEvents().isEmpty()) {
+            throw new EngineException("File contains no events.");
+        }
+
+        Map<String, Event> tempEvents = new LinkedHashMap<>();
+        for (GmEventXml xmlEvent : root.getEvents()) {
+            Event event = XmlParser.mapToEvent(xmlEvent);
+            String name = event.getName();
+
+            if (tempEvents.containsKey(name)) {
+                throw new EngineException("Event name appears twice in the file: " + name);
+            }
+            if (activeEvents.containsKey(name)) {
+                throw new EngineException("An event named '" + name + "' already exists in the system.");
+            }
+            tempEvents.put(name, event);
+        }
+
+        // Every event validated cleanly — commit.
+        for (Event event : tempEvents.values()) {
+            event.setOwnerUsername(uploader.getName());
+            uploader.addManagedEvent(event.getName());
+        }
+        activeEvents.putAll(tempEvents);
+
+        return "File loaded successfully! " + tempEvents.size() + " event(s) added; you are their market maker.";
+    }
+
+    // ==========================================
+    // 4. EVENTS — queries
+    // ==========================================
+
+    public synchronized List<Event> getAllEvents() {
+        return new ArrayList<>(activeEvents.values());
+    }
+
+    public synchronized Event getEventDetails(String eventName) {
+        return activeEvents.get(eventName);
+    }
+
+    // ==========================================
+    // 5. EVENTS — actions
+    // ==========================================
 
     /**
      * Activates a NOT_STARTED event, allowing trading to begin.
      * Only the market maker who owns the event may activate it.
      */
-    public String activateEvent(int eventId, String username) {
+    public synchronized String activateEvent(String eventName, String username) {
+        User user = requireUser(username);
+        Event event = requireEvent(eventName);
 
-        User user = activeUsers.get(username);
-        if(user == null){return "User not found: " + username;}
-
-        Event event = activeEvents.get(eventId);
-        if(event == null){return "Event with id " + eventId + " not found";}
-
-
-
-        if(!user.isMarketMakerFor(eventId)) {
-            return "You are not the MM!";
+        if (user.isBlocked()) {
+            throw new EngineException("User is blocked!");
+        }
+        if (!user.isMarketMakerFor(eventName)) {
+            throw new EngineException("You are not the MM!");
+        }
+        if (event.getStatus() != EventStatus.NOT_STARTED) {
+            throw new EngineException("Event already started / finished");
         }
 
         // LMSR needs an upfront subsidy to seed the market (the MM's max
@@ -189,36 +212,40 @@ public class EngineManager {
             subsidy = LmsrCalculator.calculateCost(zeroQuantities, event.getbParameter());
 
             if (user.getBalance() < subsidy) {
-                return "Cannot activate: MM balance (" + user.getBalance()
-                        + ") is less than the required subsidy (" + subsidy + ")";
+                throw new EngineException(String.format(
+                        "Cannot activate: MM balance (%.2f) is less than the required subsidy (%.2f)",
+                        user.getBalance(), subsidy));
             }
         } else if (event.getMethod() == TradingMethod.ORDER_BOOK) {
             if (user.getBalance() < event.getInitialInvestment()) {
-                return "Cannot activate: MM balance (" + user.getBalance()
-                        + ") is less than the required initial investment (" + event.getInitialInvestment() + ")";
+                throw new EngineException(String.format(
+                        "Cannot activate: MM balance (%.2f) is less than the required initial investment (%d)",
+                        user.getBalance(), event.getInitialInvestment()));
             }
         }
 
-        if(!event.activate()){return "Event already started / finished";}
+        event.activate();
 
         if (subsidy > 0) {
-            user.adjustBalance(-subsidy);
+            user.adjustBalance(-subsidy, "LMSR subsidy for activating '" + eventName + "'");
             event.adjustAccountBalance(subsidy);
         }
 
         if (event.getMethod() == TradingMethod.ORDER_BOOK && event.getInitialInvestment() > 0) {
-            // Spec example: d=1, initial=100 -> the MM receives 100 YES + 100 NO
-            // pairs for $100 total. The MM's cash funds the event's pool exactly
-            // like the LMSR subsidy does; the shares themselves are minted
-            // straight into the MM's own holdings on each option.
-            int pairs = event.getInitialInvestment() / event.getBaseValue();
-            user.adjustBalance(-event.getInitialInvestment());
+            // Spec example: d=1, initial=100 -> the MM receives 100 shares of
+            // EVERY option for $100 total (each "set" of one share per option
+            // pays out exactly d at close). The MM's cash funds the event's
+            // pool exactly like the LMSR subsidy does; the shares themselves
+            // are minted straight into the MM's own holdings on each option.
+            int sets = event.getInitialInvestment() / event.getBaseValue();
+            user.adjustBalance(-event.getInitialInvestment(),
+                    "Initial investment in '" + eventName + "' (" + sets + " shares of each option)");
             event.adjustAccountBalance(event.getInitialInvestment());
             long now = System.currentTimeMillis();
             for (Option option : event.getOptions()) {
-                option.addHolding(username, pairs);
-                option.addShares(pairs);
-                event.addTradeRecord(new TradeRecord(now, option.getName(), pairs, (double) pairs * event.getBaseValue(), 0.0, username, OrderSide.BUY));
+                option.addHolding(username, sets);
+                option.addShares(sets);
+                event.addTradeRecord(new TradeRecord(now, option.getName(), sets, (double) sets * event.getBaseValue(), 0.0, username, OrderSide.BUY));
             }
         }
 
@@ -226,26 +253,27 @@ public class EngineManager {
     }
 
     /**
-     * Command 4: Participate in an event by buying shares.
-     * Returns a summary of what was paid, split between the shares
-     * themselves and any purchase-time commission.
+     * LMSR: buy shares of one option. Returns a summary of what was paid,
+     * split between the shares themselves and any purchase-time commission.
      */
-    public String buyShares(int eventId, int optionIndex, int amount, String username) {
-        Event currentEvent = activeEvents.get(eventId);
-        if (currentEvent == null) {
-            return "Error: Event ID " + eventId + " does not exist.";
-        }
+    public synchronized String buyShares(String eventName, int optionIndex, int amount, String username) {
+        Event currentEvent = requireEvent(eventName);
+        User user = requireUser(username);
 
         if (currentEvent.getMethod() != TradingMethod.LMSR) {
-            return "This event uses Order Book trading — use Place Order instead.";
+            throw new EngineException("This event uses Order Book trading — use Place Order instead.");
         }
-
-        User user = activeUsers.get(username);
-        if(user == null){return "User not found: " + username;}
-
-        if(user.isBlocked()){return "User is blocked!";}
-
-        if(currentEvent.getStatus() != EventStatus.ACTIVE){return "Event is not active!";}
+        if (user.isBlocked()) {
+            throw new EngineException("User is blocked!");
+        }
+        if (currentEvent.getStatus() != EventStatus.ACTIVE) {
+            throw new EngineException("Event is not active!");
+        }
+        requireValidOptionIndex(currentEvent, optionIndex);
+        if (amount <= 0) {
+            throw new EngineException("Amount must be positive.");
+        }
+        User userMM = requireUser(currentEvent.getOwnerUsername());
 
         List<Integer> oldQuantities = new ArrayList<>();
         for (Option opt : currentEvent.getOptions()) {
@@ -256,30 +284,26 @@ public class EngineManager {
         double oldCost = LmsrCalculator.calculateCost(oldQuantities, bParameter);
 
         List<Integer> newQuantities = new ArrayList<>(oldQuantities);
-        int updatedShareCount = newQuantities.get(optionIndex) + amount;
-        newQuantities.set(optionIndex, updatedShareCount);
+        newQuantities.set(optionIndex, newQuantities.get(optionIndex) + amount);
 
         double newCost = LmsrCalculator.calculateCost(newQuantities, bParameter);
         double tradeCost = newCost - oldCost;
+
+        String optionName = currentEvent.getOptions().get(optionIndex).getName();
+
+        currentEvent.adjustAccountBalance(tradeCost);
+        currentEvent.getOptions().get(optionIndex).addShares(amount);
+        user.adjustBalance(-tradeCost, String.format("Bought %d x '%s' in '%s'", amount, optionName, eventName));
 
         double commissionAmount = 0.0;
         if (currentEvent.getCommissionType().equals("on-purchase")) {
             commissionAmount = tradeCost * (currentEvent.getCommissionRate() / 100.0);
             currentEvent.addCommission(commissionAmount);
-
-            User userMM = activeUsers.get(currentEvent.getOwnerUsername());
-            if(userMM == null){return "User not found: " + username;}
-            userMM.adjustBalance(+commissionAmount);
+            user.adjustBalance(-commissionAmount, "Purchase commission in '" + eventName + "'");
+            userMM.adjustBalance(+commissionAmount, "Commission earned from " + username + " in '" + eventName + "'");
         }
 
-        currentEvent.adjustAccountBalance(tradeCost);
-
-        currentEvent.getOptions().get(optionIndex).addShares(amount);
-
-        String optionName = currentEvent.getOptions().get(optionIndex).getName();
         double totalPaid = tradeCost + commissionAmount;
-
-        user.adjustBalance(-totalPaid);
 
         TradeRecord record = new TradeRecord(System.currentTimeMillis(), optionName, amount, tradeCost, commissionAmount, username);
         currentEvent.addTradeRecord(record);
@@ -297,40 +321,45 @@ public class EngineManager {
      * the best resting BUY order on the OTHER option, minting a new pair of
      * shares whenever the two prices together cover the event's base
      * value. Whatever's left after that rests in the book as a new order.
+     *
+     * Ex3 multi-option: same-option matching works for any number of
+     * options. Mint is only defined by the spec for a YES/NO pair, so it is
+     * only attempted on 2-option events (a design choice — see readme).
      */
-    public String placeOrder(int eventId, int optionIndex, OrderSide side, int quantity, double price, String username) {
-        Event event = activeEvents.get(eventId);
-        if (event == null) {
-            return "Error: Event ID " + eventId + " does not exist.";
-        }
-        if (event.getMethod() != TradingMethod.ORDER_BOOK) {
-            return "This event uses LMSR trading — use Buy Shares instead.";
-        }
+    public synchronized String placeOrder(String eventName, int optionIndex, OrderSide side, int quantity, double price, String username) {
+        Event event = requireEvent(eventName);
+        User user = requireUser(username);
 
-        User user = activeUsers.get(username);
-        if (user == null) {
-            return "User not found: " + username;
+        if (event.getMethod() != TradingMethod.ORDER_BOOK) {
+            throw new EngineException("This event uses LMSR trading — use Buy Shares instead.");
         }
         if (user.isBlocked()) {
-            return "User is blocked!";
+            throw new EngineException("User is blocked!");
         }
         if (event.getStatus() != EventStatus.ACTIVE) {
-            return "Event is not active!";
+            throw new EngineException("Event is not active!");
+        }
+        requireValidOptionIndex(event, optionIndex);
+        if (side == null) {
+            throw new EngineException("Order side must be BUY or SELL.");
         }
         if (quantity <= 0) {
-            return "Quantity must be positive.";
+            throw new EngineException("Quantity must be positive.");
         }
 
         double maxPrice = event.getBaseValue() - 0.01;
-        if (price < 0.01 || price > maxPrice) {
-            return String.format("Price must be between 0.01 and %.2f", maxPrice);
+        if (!(price >= 0.01 && price <= maxPrice)) { // also rejects NaN
+            throw new EngineException(String.format("Price must be between 0.01 and %.2f", maxPrice));
         }
 
         Option thisOption = event.getOptions().get(optionIndex);
-        Option otherOption = event.getOptions().get(optionIndex == 0 ? 1 : 0);
+        // Only a 2-option event has a well-defined "other side" to mint against.
+        Option otherOption = event.getOptions().size() == 2
+                ? event.getOptions().get(optionIndex == 0 ? 1 : 0)
+                : null;
 
         if (side == OrderSide.SELL && thisOption.getHolding(username) < quantity) {
-            return "Cannot sell " + quantity + " shares — you only hold " + thisOption.getHolding(username) + ".";
+            throw new EngineException("Cannot sell " + quantity + " shares — you only hold " + thisOption.getHolding(username) + ".");
         }
 
         OrderBook book = thisOption.getOrderBook();
@@ -354,7 +383,7 @@ public class EngineManager {
                 continue;
             }
 
-            if (event.isAllowMint() && side == OrderSide.BUY) {
+            if (otherOption != null && event.isAllowMint() && side == OrderSide.BUY) {
                 Order otherBid = otherOption.getOrderBook().peekBestBid();
                 boolean mintPossible = otherBid != null && price + otherBid.getPrice() >= event.getBaseValue();
                 if (mintPossible) {
@@ -390,15 +419,18 @@ public class EngineManager {
      * Executes a same-option match between the incoming order (side/user)
      * and a resting opposite-side order, at the resting order's price.
      */
-    private void executeMatch(Event event, Option option, OrderSide incomingSide, User incomingUser,
-                               Order restingOrder, int quantity, double execPrice) {
+    private  void executeMatch(Event event, Option option, OrderSide incomingSide, User incomingUser,
+                              Order restingOrder, int quantity, double execPrice) {
         User restingUser = activeUsers.get(restingOrder.getUsername());
         User buyer = incomingSide == OrderSide.BUY ? incomingUser : restingUser;
         User seller = incomingSide == OrderSide.BUY ? restingUser : incomingUser;
 
         double tradeValue = quantity * execPrice;
-        buyer.adjustBalance(-tradeValue);
-        seller.adjustBalance(+tradeValue);
+        String eventName = event.getName();
+        buyer.adjustBalance(-tradeValue, String.format("Bought %d x '%s' @ %.2f in '%s'",
+                quantity, option.getName(), execPrice, eventName));
+        seller.adjustBalance(+tradeValue, String.format("Sold %d x '%s' @ %.2f in '%s'",
+                quantity, option.getName(), execPrice, eventName));
 
         option.removeHolding(seller.getName(), quantity);
         option.addHolding(buyer.getName(), quantity);
@@ -421,13 +453,16 @@ public class EngineManager {
      * event.getBaseValue() by construction.
      */
     private void executeMint(Event event, Option myOption, Option otherOption, User incomingUser,
-                              double myPrice, Order otherBid, int quantity) {
+                             double myPrice, Order otherBid, int quantity) {
         User otherUser = activeUsers.get(otherBid.getUsername());
 
         double myCost = quantity * myPrice;
         double otherCost = quantity * otherBid.getPrice();
-        incomingUser.adjustBalance(-myCost);
-        otherUser.adjustBalance(-otherCost);
+        String eventName = event.getName();
+        incomingUser.adjustBalance(-myCost, String.format("Bought %d x '%s' @ %.2f in '%s' (mint)",
+                quantity, myOption.getName(), myPrice, eventName));
+        otherUser.adjustBalance(-otherCost, String.format("Bought %d x '%s' @ %.2f in '%s' (mint)",
+                quantity, otherOption.getName(), otherBid.getPrice(), eventName));
         event.adjustAccountBalance(myCost + otherCost);
 
         myOption.addHolding(incomingUser.getName(), quantity);
@@ -458,19 +493,21 @@ public class EngineManager {
             return 0.0;
         }
         double commission = tradeValue * (event.getCommissionRate() / 100.0);
-        buyer.adjustBalance(-commission);
-        activeUsers.get(event.getOwnerUsername()).adjustBalance(+commission);
+        buyer.adjustBalance(-commission, "Purchase commission in '" + event.getName() + "'");
+        activeUsers.get(event.getOwnerUsername()).adjustBalance(+commission,
+                "Commission earned from " + buyer.getName() + " in '" + event.getName() + "'");
         event.addCommission(commission);
         return commission;
     }
 
     /**
-     * Order Book close: every YES/NO share that ever existed was created by
-     * a mint that put exactly d dollars into event.accountBalance per pair
-     * (matches never touch the event account — buyer pays seller directly),
-     * so the winning option's total outstanding shares always exactly
-     * equals event.accountBalance / baseValue. That means the payout math
-     * is identical in shape to LMSR's: figure out the total pool, optionally
+     * Order Book close: every share that ever existed was created by a mint
+     * (or the MM's initial purchase) that put exactly d dollars into
+     * event.accountBalance per set of one-share-per-option (matches never
+     * touch the event account — buyer pays seller directly), so the winning
+     * option's total outstanding shares always exactly equals
+     * event.accountBalance / baseValue. That means the payout math is
+     * identical in shape to LMSR's: figure out the total pool, optionally
      * carve out an on-close commission, split what's left evenly per
      * winning share. The only real difference is where "who holds how many
      * winning shares" comes from — Option.holdings instead of TradeRecord
@@ -491,7 +528,7 @@ public class EngineManager {
         if ("on-close".equals(event.getCommissionType())) {
             commissionAmount = totalPool * (event.getCommissionRate() / 100.0);
             event.addCommission(commissionAmount);
-            userMM.adjustBalance(+commissionAmount);
+            userMM.adjustBalance(+commissionAmount, "On-close commission from '" + event.getName() + "'");
         }
 
         double payoutPool = totalPool - commissionAmount;
@@ -499,7 +536,8 @@ public class EngineManager {
 
         for (Map.Entry<String, Integer> holder : winners.entrySet()) {
             if (holder.getValue() > 0) {
-                activeUsers.get(holder.getKey()).adjustBalance(+payoutPerShare * holder.getValue());
+                activeUsers.get(holder.getKey()).adjustBalance(+payoutPerShare * holder.getValue(),
+                        payoutDescription(holder.getValue(), winningOption.getName(), event.getName()));
             }
         }
 
@@ -520,25 +558,19 @@ public class EngineManager {
     }
 
     /**
-     * Command 5: Resolve and close an active event. Only the MM who owns the
-     * event may close it.
+     * Resolve and close an active event. Only the MM who owns the event may
+     * close it.
      */
-    public String closeEvent(int eventId, int winningOptionIndex, String username) {
-        Event currentEvent = activeEvents.get(eventId);
-        if (currentEvent == null) {
-            return "Error: Event ID " + eventId + " does not exist.";
-        }
+    public synchronized String closeEvent(String eventName, int winningOptionIndex, String username) {
+        Event currentEvent = requireEvent(eventName);
+        User userMM = requireUser(username);
 
-        User userMM = activeUsers.get(username);
-        if (userMM == null) {
-            return "User not found: " + username;
+        if (!userMM.isMarketMakerFor(eventName)) {
+            throw new EngineException("You are not the MM!");
         }
-        if (!userMM.isMarketMakerFor(eventId)) {
-            return "You are not the MM!";
-        }
-
+        requireValidOptionIndex(currentEvent, winningOptionIndex);
         if (!currentEvent.close(winningOptionIndex)) {
-            return "Event is not ACTIVE — cannot close it.";
+            throw new EngineException("Event is not ACTIVE — cannot close it.");
         }
 
         if (currentEvent.getMethod() == TradingMethod.ORDER_BOOK) {
@@ -557,8 +589,7 @@ public class EngineManager {
             currentEvent.addCommission(commissionAmount);
             totalPool -= commissionAmount;
 
-
-            userMM.adjustBalance(+commissionAmount);
+            userMM.adjustBalance(+commissionAmount, "On-close commission from '" + eventName + "'");
         }
 
         int winningShares = currentEvent.getOptions().get(winningOptionIndex).getShares();
@@ -567,21 +598,56 @@ public class EngineManager {
             payoutPerShare = totalPool / winningShares;
         }
 
-
-        //PAY WINNERS
+        // PAY WINNERS — LMSR never allows selling, so a user's winning shares
+        // are simply the sum of their buys of that option. Summed per user
+        // first so each winner gets ONE ledger line, not one per trade.
         String winningOption = currentEvent.getOptions().get(winningOptionIndex).getName();
-        for(TradeRecord tradeRecord : currentEvent.getTradeHistory()){
-            if(tradeRecord.getOptionName().equals(winningOption)){
-                User holder = activeUsers.get(tradeRecord.getUsername());
-                holder.adjustBalance(+ payoutPerShare* tradeRecord.getQuantity());
+        Map<String, Integer> winningSharesByUser = new LinkedHashMap<>();
+        for (TradeRecord tradeRecord : currentEvent.getTradeHistory()) {
+            if (tradeRecord.getOptionName().equals(winningOption)) {
+                winningSharesByUser.merge(tradeRecord.getUsername(), tradeRecord.getQuantity(), Integer::sum);
             }
         }
-        //Adjust event pool
+        for (Map.Entry<String, Integer> holder : winningSharesByUser.entrySet()) {
+            activeUsers.get(holder.getKey()).adjustBalance(+payoutPerShare * holder.getValue(),
+                    payoutDescription(holder.getValue(), winningOption, eventName));
+        }
+        // Adjust event pool
         currentEvent.adjustAccountBalance(-totalPool);
 
         return String.format(
                 "Event Closed! Winning Option: %s%nTotal Pool (after fees): %.2f%nPayout per winning share: %.2f",
-                currentEvent.getOptions().get(winningOptionIndex).getName(), totalPool, payoutPerShare);
+                winningOption, totalPool, payoutPerShare);
     }
 
+    // ==========================================
+    // 6. HELPERS
+    // ==========================================
+
+    private User requireUser(String username) {
+        User user = username == null ? null : activeUsers.get(username);
+        if (user == null) {
+            throw new EngineException("User not found: " + username);
+        }
+        return user;
+    }
+
+    private Event requireEvent(String eventName) {
+        Event event = eventName == null ? null : activeEvents.get(eventName);
+        if (event == null) {
+            throw new EngineException("Event not found: " + eventName);
+        }
+        return event;
+    }
+
+    // The option index now arrives from an HTTP request — never trust it.
+    private void requireValidOptionIndex(Event event, int optionIndex) {
+        if (optionIndex < 0 || optionIndex >= event.getOptions().size()) {
+            throw new EngineException("Invalid option index: " + optionIndex);
+        }
+    }
+
+    private static String payoutDescription(int shares, String optionName, String eventName) {
+        return String.format("Payout for %d winning '%s' shares in '%s'", shares, optionName, eventName);
+    }
 }

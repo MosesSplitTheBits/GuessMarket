@@ -1,47 +1,75 @@
 package com.guessmarket.engine.util;
 
+import com.guessmarket.engine.api.EngineException;
 import com.guessmarket.engine.model.Event;
 import com.guessmarket.engine.model.Option;
 import com.guessmarket.engine.model.TradingMethod;
-import com.guessmarket.engine.model.User;
-import com.guessmarket.engine.xml.EventRefXml;
 import com.guessmarket.engine.xml.GmEventXml;
 import com.guessmarket.engine.xml.GmLmsrXml;
-import com.guessmarket.engine.xml.GmUserXml;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class XmlParser {
 
     /**
      * Builds a domain Event from its JAXB-parsed XML representation,
      * validating the business rules the XML schema itself doesn't enforce
-     * (commission range, exact option count).
+     * (commission range, option count, Order Book config).
      */
-    public static Event mapToEvent(GmEventXml xmlEvent) throws Exception {
+    public static Event mapToEvent(GmEventXml xmlEvent) {
 
-        int id = xmlEvent.getId();
-        String name = xmlEvent.getName();
-        String description = xmlEvent.getDescription();
+        // Ex3: the name is the event's identity now (schema v3 dropped <id>),
+        // so it must be present, and surrounding spaces must not make two
+        // otherwise-identical names count as different (spec: trim()).
+        String name = xmlEvent.getName() == null ? "" : xmlEvent.getName().trim();
+        if (name.isEmpty()) {
+            throw new EngineException("Every event must have a non-empty name.");
+        }
 
+        String description = xmlEvent.getDescription() == null ? "" : xmlEvent.getDescription().trim();
+
+        if (xmlEvent.getCommission() == null) {
+            throw new EngineException("Event '" + name + "' is missing its commission.");
+        }
         int rate = xmlEvent.getCommission().getRate();
         if (rate < 0 || rate > 90) {
-            throw new Exception("Commission must be between 0 and 90. Found: " + rate);
+            throw new EngineException("Event '" + name + "': commission must be between 0 and 90. Found: " + rate);
         }
 
         String commissionType = xmlEvent.getCommission().getType();
+        if (!"on-close".equals(commissionType) && !"on-purchase".equals(commissionType)) {
+            throw new EngineException("Event '" + name + "': commission type must be on-close or on-purchase. Found: " + commissionType);
+        }
 
-        if (xmlEvent.getOptions().size() != 2) {
-            throw new Exception("Event must have exactly 2 options, found: " + xmlEvent.getOptions().size());
+        // Ex3 goal: multi-option events. At least 2 options (a market needs a
+        // choice); no upper limit. Order Book mint stays 2-option only — see
+        // EngineManager.placeOrder.
+        List<String> rawOptions = xmlEvent.getOptions();
+        if (rawOptions == null || rawOptions.size() < 2) {
+            throw new EngineException("Event '" + name + "' must have at least 2 options, found: "
+                    + (rawOptions == null ? 0 : rawOptions.size()));
         }
         List<Option> optionsList = new ArrayList<>();
-
-        for (String option : xmlEvent.getOptions()) {
-            Option newOption = new Option(option);
-            optionsList.add(newOption);
+        // Option names must be unique within an event: LMSR's close-out pays
+        // winners by matching TradeRecord option names.
+        Set<String> seenOptionNames = new HashSet<>();
+        for (String rawOption : rawOptions) {
+            String optionName = rawOption == null ? "" : rawOption.trim();
+            if (optionName.isEmpty()) {
+                throw new EngineException("Event '" + name + "' has an empty option name.");
+            }
+            if (!seenOptionNames.add(optionName)) {
+                throw new EngineException("Event '" + name + "' has a duplicate option: " + optionName);
+            }
+            optionsList.add(new Option(optionName));
         }
 
+        if (xmlEvent.getMethod() == null) {
+            throw new EngineException("Event '" + name + "' is missing its trading method.");
+        }
         GmLmsrXml lmsr = xmlEvent.getMethod().getLmsr();
 
         TradingMethod method;
@@ -52,48 +80,29 @@ public class XmlParser {
         if (lmsr != null) {
             method = TradingMethod.LMSR;
             bParameter = lmsr.getB();
-        } else {
+            if (bParameter <= 0) {
+                throw new EngineException("Event '" + name + "': b must be a positive integer. Found: " + bParameter);
+            }
+        } else if (xmlEvent.getMethod().getGmOrderBook() != null) {
             method = TradingMethod.ORDER_BOOK;
             bParameter = 0; // unused for Order Book — it has its own config below
             allowMint = xmlEvent.getMethod().getGmOrderBook().getAllowMint();
             initial = xmlEvent.getMethod().getGmOrderBook().getInitial();
             d = xmlEvent.getMethod().getGmOrderBook().getD();
 
-            if(initial < 0 || d <= 0) {
-                throw new Exception("Initial value must be >= 0 and d > 0 ");
+            if (initial < 0 || d <= 0) {
+                throw new EngineException("Event '" + name + "': initial must be >= 0 and d > 0.");
             }
-
+        } else {
+            throw new EngineException("Event '" + name + "' must use either GM-LMSR or GM-order-book.");
         }
 
-        Event event = new Event(id, name, description, rate, optionsList, commissionType, bParameter, method);
+        Event event = new Event(name, description, rate, optionsList, commissionType, bParameter, method);
 
-        if(method == TradingMethod.ORDER_BOOK) {
-            event.setOrderBookConfig(allowMint,initial,d);
+        if (method == TradingMethod.ORDER_BOOK) {
+            event.setOrderBookConfig(allowMint, initial, d);
         }
 
         return event;
     }
-
-    public static User mapToUser(GmUserXml xmlUser) throws Exception {
-
-        String name = xmlUser.getName();
-        double initCash = xmlUser.getInitialCash();
-        if (initCash < 0){
-            throw new Exception("Initial Cash must be greater than zero.");
-        }
-
-        User newUser = new User(name, initCash);
-
-        List<EventRefXml> managedEvents = xmlUser.getManagedEvents();
-
-        if (managedEvents != null) {
-            for (EventRefXml ref : managedEvents) {
-                newUser.addManagedEvent(ref.getId());
-            }
-        }
-
-        return newUser;
-
-    }
-
 }

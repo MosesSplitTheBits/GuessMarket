@@ -45,3 +45,8 @@ docs/assignment-spec.md
 docs/Guess_Market_v1_1.docx
 docs/SchemaV2.png
 docs/AppScetch.png
+# Course example projects from Mama (~39 MB, not our code)
+docs/*.rar
+# Ex3 engine tests (local-only)
+engine/src/test/java/com/guessmarket/engine/api/EngineManagerEx3Test.java
+engine/src/test/java/com/guessmarket/engine/api/EngineManagerConcurrencyTest.java

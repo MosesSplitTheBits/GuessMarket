@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class Event {
-    private int id;
     private String name;
     private String description;
     private int commissionRate; // 0 to 90
@@ -28,15 +27,14 @@ public class Event {
     private int initialInvestment;
     private int baseValue; // "d" — value paid per share of the winning option at close
 
-    // The collection of options (Yes / No)
+    // The event's possible outcomes (2 or more — Ex3 allows multi-option events)
     private List<Option> options;
 
     // The trade's history list
     private List<TradeRecord> tradeHistory;
 
 
-    public Event(int id, String name, String description, int commissionRate, List<Option> options, String commissionType, int bParameter, TradingMethod method) {
-        this.id = id;
+    public Event(String name, String description, int commissionRate, List<Option> options, String commissionType, int bParameter, TradingMethod method) {
         this.name = name;
         this.description = description;
         this.commissionRate = commissionRate;
@@ -95,10 +93,6 @@ public class Event {
 
     public int getBaseValue() {
         return baseValue;
-    }
-
-    public Integer getId() {
-        return this.id;
     }
 
     public String getName() {

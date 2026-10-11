@@ -12,16 +12,8 @@ public class GuessMarketXml {
     @XmlElement(name = "GM-event")
     private List<GmEventXml>  events;
 
-    @XmlElementWrapper(name = "GM-users")
-    @XmlElement(name = "GM-user")
-    private List<GmUserXml> users;
-
     public List<GmEventXml> getEvents() {
         return events;
-    }
-
-    public List<GmUserXml> getUsers() {
-        return users;
     }
 
 }
