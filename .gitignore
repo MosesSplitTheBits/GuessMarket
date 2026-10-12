@@ -50,3 +50,7 @@ docs/*.rar
 # Ex3 engine tests (local-only)
 engine/src/test/java/com/guessmarket/engine/api/EngineManagerEx3Test.java
 engine/src/test/java/com/guessmarket/engine/api/EngineManagerConcurrencyTest.java
+# Local dev scripts (build/deploy to local Tomcat, end-to-end curl test)
+dev-deploy.bat
+smoke-test.ps1
+cookies.txt

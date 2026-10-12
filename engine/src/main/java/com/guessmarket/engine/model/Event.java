@@ -27,7 +27,7 @@ public class Event {
     private int initialInvestment;
     private int baseValue; // "d" — value paid per share of the winning option at close
 
-    // The event's possible outcomes (2 or more — Ex3 allows multi-option events)
+    // The two possible outcomes (e.g. Yes / No)
     private List<Option> options;
 
     // The trade's history list

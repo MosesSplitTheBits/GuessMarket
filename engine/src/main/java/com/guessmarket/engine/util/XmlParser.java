@@ -44,12 +44,12 @@ public class XmlParser {
             throw new EngineException("Event '" + name + "': commission type must be on-close or on-purchase. Found: " + commissionType);
         }
 
-        // Ex3 goal: multi-option events. At least 2 options (a market needs a
-        // choice); no upper limit. Order Book mint stays 2-option only — see
-        // EngineManager.placeOrder.
+        // Exactly 2 options (YES/NO-style). The Ex3 spec's goals list mentions
+        // multi-option events, but the grader confirmed it is NOT required,
+        // and the official GM-EX3-Schema.xsd caps GM-option at maxOccurs="2".
         List<String> rawOptions = xmlEvent.getOptions();
-        if (rawOptions == null || rawOptions.size() < 2) {
-            throw new EngineException("Event '" + name + "' must have at least 2 options, found: "
+        if (rawOptions == null || rawOptions.size() != 2) {
+            throw new EngineException("Event '" + name + "' must have exactly 2 options, found: "
                     + (rawOptions == null ? 0 : rawOptions.size()));
         }
         List<Option> optionsList = new ArrayList<>();

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guessmarket</groupId>
+        <artifactId>GuessMarket</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <!-- The Tomcat web application. Builds ONE self-contained WAR: every jar it
+         needs (engine, dto, JAXB, Gson) is bundled into WEB-INF/lib, as the
+         spec requires — the grader supplies nothing but Tomcat itself. -->
+    <artifactId>server</artifactId>
+    <packaging>war</packaging>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.guessmarket</groupId>
+            <artifactId>engine</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.guessmarket</groupId>
+            <artifactId>dto</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+        <!-- Servlet 6.0 = Tomcat 10.1 (jakarta.* packages, like the course
+             examples). "provided": compile against it, but do NOT bundle it —
+             Tomcat already has its own copy, and two copies would clash. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Fixed WAR name => fixed context path (/guess-market), which the
+             client relies on (spec: we may assume the WAR is not renamed). -->
+        <finalName>guess-market</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

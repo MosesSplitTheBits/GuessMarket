@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guessmarket</groupId>
+        <artifactId>GuessMarket</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <!-- The "contract" between server and client: immutable data records that
+         travel as JSON, plus the shared URL/parameter names. Deliberately has
+         NO dependencies, so the client can use it without pulling in the engine. -->
+    <artifactId>dto</artifactId>
+</project>

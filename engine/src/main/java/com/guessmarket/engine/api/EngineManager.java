@@ -1,5 +1,6 @@
 package com.guessmarket.engine.api;
 
+import com.guessmarket.dto.*;
 import com.guessmarket.engine.model.*;
 
 import java.io.InputStream;
@@ -8,6 +9,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 
+import com.guessmarket.engine.util.DtoMapper;
 import com.guessmarket.engine.util.XmlParser;
 import com.guessmarket.engine.util.LmsrCalculator;
 import com.guessmarket.engine.xml.GmEventXml;
@@ -59,8 +61,11 @@ public class EngineManager {
     /**
      * Ex3 login: registers a brand-new user with an empty account.
      * Usernames are unique (spec); surrounding spaces are ignored.
+     * Returns the name as actually registered (trimmed) — the caller should
+     * use THAT, not its raw input. (Returns only the name, not the User: no
+     * live engine object ever leaves the engine.)
      */
-    public synchronized User registerUser(String rawName) {
+    public synchronized String registerUser(String rawName) {
         String name = rawName == null ? "" : rawName.trim();
         if (name.isEmpty()) {
             throw new EngineException("Username must not be empty.");
@@ -70,7 +75,7 @@ public class EngineManager {
         }
         User user = new User(name);
         activeUsers.put(name, user);
-        return user;
+        return name;
     }
 
     public synchronized boolean isUserExists(String username) {
@@ -87,12 +92,36 @@ public class EngineManager {
         return String.format("Deposited %.2f. New balance: %.2f", amount, user.getBalance());
     }
 
-    public synchronized List<User> getAllUsers() {
+    // Package-private on purpose: these hand out LIVE, mutable User objects,
+    // so only same-package code (the engine's own tests) may touch them.
+    // Everything outside the engine uses the DTO snapshot methods below.
+    synchronized List<User> getAllUsers() {
         return new ArrayList<>(activeUsers.values());
     }
 
-    public synchronized User getUserDetails(String username) {
+    synchronized User getUserDetails(String username) {
         return activeUsers.get(username);
+    }
+
+    /** Every user's public info (spec: name, balance, is-MM). */
+    public synchronized List<UserSummaryDto> getUsersSnapshot() {
+        return activeUsers.values().stream().map(DtoMapper::toSummary).toList();
+    }
+
+    /** The given user's own account page. */
+    public synchronized UserDetailsDto getUserSnapshot(String username) {
+        return DtoMapper.toDetails(requireUser(username), new ArrayList<>(activeEvents.values()));
+    }
+
+    /**
+     * Ledger delta as a DTO: the entries the client hasn't seen, plus the
+     * version (= total ledger size) to send as fromIndex next time. Both
+     * come from the same locked moment, so no line can be skipped or
+     * repeated between polls.
+     */
+    public synchronized LedgerDeltaDto getLedgerDelta(String username, int fromIndex) {
+        List<LedgerEntryDto> entries = getLedger(username, fromIndex).stream().map(DtoMapper::toDto).toList();
+        return new LedgerDeltaDto(entries, requireUser(username).getLedger().size());
     }
 
     /**
@@ -170,12 +199,23 @@ public class EngineManager {
     // 4. EVENTS — queries
     // ==========================================
 
-    public synchronized List<Event> getAllEvents() {
+    // Package-private for the same reason as getAllUsers: live objects.
+    synchronized List<Event> getAllEvents() {
         return new ArrayList<>(activeEvents.values());
     }
 
-    public synchronized Event getEventDetails(String eventName) {
+    synchronized Event getEventDetails(String eventName) {
         return activeEvents.get(eventName);
+    }
+
+    /** The events list: one immutable summary per event, in upload order. */
+    public synchronized List<EventSummaryDto> getEventsSnapshot() {
+        return activeEvents.values().stream().map(DtoMapper::toSummary).toList();
+    }
+
+    /** Everything about one event, frozen at this moment. */
+    public synchronized EventDetailsDto getEventSnapshot(String eventName) {
+        return DtoMapper.toDetails(requireEvent(eventName));
     }
 
     // ==========================================
@@ -232,20 +272,20 @@ public class EngineManager {
         }
 
         if (event.getMethod() == TradingMethod.ORDER_BOOK && event.getInitialInvestment() > 0) {
-            // Spec example: d=1, initial=100 -> the MM receives 100 shares of
-            // EVERY option for $100 total (each "set" of one share per option
-            // pays out exactly d at close). The MM's cash funds the event's
-            // pool exactly like the LMSR subsidy does; the shares themselves
-            // are minted straight into the MM's own holdings on each option.
-            int sets = event.getInitialInvestment() / event.getBaseValue();
+            // Spec example: d=1, initial=100 -> the MM receives 100 YES + 100 NO
+            // pairs for $100 total (each pair pays out exactly d at close). The
+            // MM's cash funds the event's pool exactly like the LMSR subsidy
+            // does; the shares themselves are minted straight into the MM's own
+            // holdings on each option.
+            int pairs = event.getInitialInvestment() / event.getBaseValue();
             user.adjustBalance(-event.getInitialInvestment(),
-                    "Initial investment in '" + eventName + "' (" + sets + " shares of each option)");
+                    "Initial investment in '" + eventName + "' (" + pairs + " YES/NO pairs)");
             event.adjustAccountBalance(event.getInitialInvestment());
             long now = System.currentTimeMillis();
             for (Option option : event.getOptions()) {
-                option.addHolding(username, sets);
-                option.addShares(sets);
-                event.addTradeRecord(new TradeRecord(now, option.getName(), sets, (double) sets * event.getBaseValue(), 0.0, username, OrderSide.BUY));
+                option.addHolding(username, pairs);
+                option.addShares(pairs);
+                event.addTradeRecord(new TradeRecord(now, option.getName(), pairs, (double) pairs * event.getBaseValue(), 0.0, username, OrderSide.BUY));
             }
         }
 
@@ -321,10 +361,6 @@ public class EngineManager {
      * the best resting BUY order on the OTHER option, minting a new pair of
      * shares whenever the two prices together cover the event's base
      * value. Whatever's left after that rests in the book as a new order.
-     *
-     * Ex3 multi-option: same-option matching works for any number of
-     * options. Mint is only defined by the spec for a YES/NO pair, so it is
-     * only attempted on 2-option events (a design choice — see readme).
      */
     public synchronized String placeOrder(String eventName, int optionIndex, OrderSide side, int quantity, double price, String username) {
         Event event = requireEvent(eventName);
@@ -353,10 +389,7 @@ public class EngineManager {
         }
 
         Option thisOption = event.getOptions().get(optionIndex);
-        // Only a 2-option event has a well-defined "other side" to mint against.
-        Option otherOption = event.getOptions().size() == 2
-                ? event.getOptions().get(optionIndex == 0 ? 1 : 0)
-                : null;
+        Option otherOption = event.getOptions().get(optionIndex == 0 ? 1 : 0);
 
         if (side == OrderSide.SELL && thisOption.getHolding(username) < quantity) {
             throw new EngineException("Cannot sell " + quantity + " shares — you only hold " + thisOption.getHolding(username) + ".");
@@ -383,7 +416,7 @@ public class EngineManager {
                 continue;
             }
 
-            if (otherOption != null && event.isAllowMint() && side == OrderSide.BUY) {
+            if (event.isAllowMint() && side == OrderSide.BUY) {
                 Order otherBid = otherOption.getOrderBook().peekBestBid();
                 boolean mintPossible = otherBid != null && price + otherBid.getPrice() >= event.getBaseValue();
                 if (mintPossible) {
@@ -503,7 +536,7 @@ public class EngineManager {
     /**
      * Order Book close: every share that ever existed was created by a mint
      * (or the MM's initial purchase) that put exactly d dollars into
-     * event.accountBalance per set of one-share-per-option (matches never
+     * event.accountBalance per YES/NO pair (matches never
      * touch the event account — buyer pays seller directly), so the winning
      * option's total outstanding shares always exactly equals
      * event.accountBalance / baseValue. That means the payout math is

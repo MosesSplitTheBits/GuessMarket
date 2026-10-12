@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Guess-Market>
+	<GM-events>
+		<GM-event name="Who wins the league">
+			<description>Test fixture event</description>
+			<commission type="on-purchase">10</commission>
+			<GM-options>
+				<GM-option>Team A</GM-option>
+				<GM-option>Team B</GM-option>
+			</GM-options>
+			<GM-method>
+				<GM-LMSR><b>100</b></GM-LMSR>
+			</GM-method>
+		</GM-event>
+	</GM-events>
+</Guess-Market>
