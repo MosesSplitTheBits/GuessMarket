@@ -12,6 +12,7 @@
         <module>dto</module>
         <module>engine</module>
         <module>server</module>
+        <module>client</module>
     </modules>
     <!-- Frozen modules, intentionally left out of the reactor build — their
          source is untouched on disk, just no longer built by `mvn` on the parent:

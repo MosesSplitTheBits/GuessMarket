@@ -40,10 +40,7 @@ public class LoginServlet extends HttpServlet {
             return;
         }
 
-        // No synchronized(this) needed here, unlike the course example:
-        // registerUser is itself a synchronized engine method that does the
-        // "does the name exist? -> add it" check-then-act as ONE atomic step,
-        // so two simultaneous logins with the same name can't both succeed.
+
         EngineManager engine = ServletUtils.getEngine(getServletContext());
         String registeredName;
         try {
@@ -53,10 +50,7 @@ public class LoginServlet extends HttpServlet {
             return;
         }
 
-        // getSession(true) creates the session; Tomcat sends its id back as the
-        // JSESSIONID cookie, and every later request carrying that cookie is
-        // recognized as this user. Store the name the ENGINE registered, so the
-        // session and the engine can never disagree on who this is.
+
         request.getSession(true).setAttribute(SessionUtils.USERNAME_ATTRIBUTE, registeredName);
 
         ServletUtils.writeText(response, HttpServletResponse.SC_OK, "Welcome " + registeredName);

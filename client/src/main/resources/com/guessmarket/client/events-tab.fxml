@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<!--
+  Left = filter row + event list, right = selected event's details
+  (event-detail.fxml), matching the Events screen of the Ex3 sketch.
+  Each filter is a ComboBox defaulting to "All" (populated + wired in
+  EventsController), combined with AND logic across the three in
+  applyFilters().
+-->
+<SplitPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.guessmarket.client.events.EventsController"
+           dividerPositions="0.3">
+
+    <VBox spacing="5">
+        <VBox spacing="3">
+            <HBox spacing="5">
+                <Label text="Type:" minWidth="80"/>
+                <ComboBox fx:id="typeFilterComboBox"/>
+            </HBox>
+            <HBox spacing="5">
+                <Label text="Status:" minWidth="80"/>
+                <ComboBox fx:id="statusFilterComboBox"/>
+            </HBox>
+            <HBox spacing="5">
+                <Label text="Commission:" minWidth="80"/>
+                <ComboBox fx:id="commissionFilterComboBox"/>
+            </HBox>
+        </VBox>
+
+        <ListView fx:id="eventsListView" VBox.vgrow="ALWAYS"/>
+    </VBox>
+
+    <fx:include fx:id="eventDetail" source="event-detail.fxml"/>
+
+</SplitPane>
