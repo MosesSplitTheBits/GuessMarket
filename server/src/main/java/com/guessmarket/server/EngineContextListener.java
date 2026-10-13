@@ -10,7 +10,6 @@ import jakarta.servlet.annotation.WebListener;
  * Runs once, when Tomcat deploys the web app — before any request arrives.
  * Creates THE single EngineManager and stores it in the ServletContext, the
  * one storage area shared by every servlet and every request.
- *
  */
 @WebListener
 public class EngineContextListener implements ServletContextListener {

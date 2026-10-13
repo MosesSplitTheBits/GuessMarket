@@ -31,7 +31,7 @@ public class EventsListServlet extends HttpServlet {
         // already answered 401 when it returns null — we just stop.
         String username = SessionUtils.requireUsername(request, response);
         if (username == null) {
-            return; // <- the line the course's ChatServlet forgot
+            return;
         }
 
         // (2) The engine hands back immutable snapshots, built inside its own

@@ -369,8 +369,8 @@ public class EventDetailController {
         }
 
         private void buildOrderBookControls(int baseValue) {
-            // Stats on two short lines — one long line was too wide for a
-            // ~260px pane in Ex2 and cramped the trade form below it.
+            // Stats on two short lines — one long line is too wide for a
+            // narrow option pane and cramps the trade form below it.
             statsLine1 = new Label();
             statsLine2 = new Label();
             bidsLabel = new Label();

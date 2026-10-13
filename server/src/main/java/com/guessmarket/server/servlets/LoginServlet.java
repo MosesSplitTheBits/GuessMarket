@@ -17,7 +17,6 @@ import java.io.IOException;
  *   200 + welcome message -> registered, and this session is now "dan"
  *   400                   -> no username given
  *   409                   -> name already taken (spec: show an error, let them retry)
- *
  */
 @WebServlet(urlPatterns = ApiConstants.LOGIN)
 public class LoginServlet extends HttpServlet {

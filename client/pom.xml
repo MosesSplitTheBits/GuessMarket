@@ -51,6 +51,8 @@
     </dependencies>
 
     <build>
+        <!-- run.bat launches the jar by this exact name. -->
+        <finalName>guess-market-client</finalName>
         <plugins>
             <!-- Dev: mvn -pl client javafx:run -->
             <plugin>

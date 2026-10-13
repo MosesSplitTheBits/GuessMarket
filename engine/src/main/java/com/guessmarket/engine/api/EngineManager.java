@@ -27,7 +27,7 @@ public class EngineManager {
 
 
     // ==========================================
-    // 1. STATE (The Memory)
+    // 1. STATE
     // ==========================================
 
     // JAXBContext is expensive to build and thread-safe once built, so one
@@ -242,7 +242,7 @@ public class EngineManager {
 
         // LMSR needs an upfront subsidy to seed the market (the MM's max
         // possible loss): C(0) with every option's shares at 0. Order Book
-        // instead requires the MM's initial share purchase (spec line 695).
+        // instead requires the MM's initial share purchase (spec, Order Book appendix).
         double subsidy = 0.0;
         if (event.getMethod() == TradingMethod.LMSR) {
             List<Integer> zeroQuantities = new ArrayList<>();
@@ -645,7 +645,6 @@ public class EngineManager {
             activeUsers.get(holder.getKey()).adjustBalance(+payoutPerShare * holder.getValue(),
                     payoutDescription(holder.getValue(), winningOption, eventName));
         }
-        // Adjust event pool
         currentEvent.adjustAccountBalance(-totalPool);
 
         return String.format(

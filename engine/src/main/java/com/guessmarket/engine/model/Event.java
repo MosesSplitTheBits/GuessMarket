@@ -14,9 +14,10 @@ public class Event {
     private Integer winningOptionIndex; // null until the event is closed
     private TradingMethod method;
 
-    // The event's own pooled cash: funded by the MM's subsidy on activation,
-    // topped up by trade proceeds on each buy, drawn down to pay winners on
-    // close. Kept separate from the owning MM's personal User.balance.
+    // The event's own pooled cash: funded by the MM on activation (LMSR
+    // subsidy / Order Book initial purchase), grown by LMSR buys and Order
+    // Book mints, drawn down to pay winners on close. Kept separate from the
+    // owning MM's personal User.balance.
     private double accountBalance;
 
     // LMSR specific
@@ -30,7 +31,7 @@ public class Event {
     // The two possible outcomes (e.g. Yes / No)
     private List<Option> options;
 
-    // The trade's history list
+    // Every trade in this event, oldest first
     private List<TradeRecord> tradeHistory;
 
 
